@@ -19,6 +19,12 @@ class HierarchicalMarkovTree:
 
         self.alpha = 1 # parameter of the dirichlet prior
 
+    def _assert_valid_vertex(self, vertex_id):
+        if self.microstate_parents.get(vertex_id) is None:
+            if self.vertices.get(vertex_id) is None:
+                return False
+        return True
+
     def _is_microstate(self, vertex_id):
         if self.microstate_parents.get(vertex_id) is None:
             return False
@@ -29,6 +35,17 @@ class HierarchicalMarkovTree:
         self.unseen_id = get_unique_id()
         self.microstate_parents[self.unseen_id] = self.unseen_id
         self.microstate_counts = np.array([self.unseen_id, 1])
+
+    def set_parent(self, child_id, parent_id):
+        if not self._assert_valid_vertex(parent_id):
+            raise ValueError("Got parent_id for non-existing id")
+        if not self._assert_valid_vertex(child_id):
+            raise ValueError("Got child_id for non-existing id")
+
+        if self._is_microstate(child_id):
+            self.microstate_parents[child_id] = parent_id
+        else:
+            self.vertices[child_id].parent = parent_id
 
     def get_external_T(self, vertex_id):
         if self.microstate_parents.get(vertex_id): # if this is a microstate
@@ -64,22 +81,22 @@ class HierarchicalMarkovTree:
 
     def remove_vertex(self, vertex_id):
         assert not self._is_microstate(vertex_id)
+        #TODO maybe add assertion that there are no orphans leftover
 
-        parent = self.vertices[vertex_id].parent
+        parent_id = self.vertices[vertex_id].parent
+        parent = self.vertices[parent_id]
         del self.vertices[vertex.id]
         del parent.children[vertex_id]
-
         parent._T_is_updated = False
-        for child_id in parent.children:
-            self.vertices[child_id]._T_is_updated = False
  
 class hierarchicalMSM:
 
     def __init__(self, tree, children, parent, tau=None):
         self.tree = tree
-        self.children = children #TODO inform children
-        self.parent = parent #TODO inform parent - parent needs to add my id to its children
+        self.children = children
+        self.parent = parent
         self.tau = tau
+        self.id = util.get_unique_id()
 
     @property
     def T(self)
@@ -88,6 +105,18 @@ class hierarchicalMSM:
             return self._T
         else:
             return self._update_T
+    
+    @property
+    def parent(self):
+        return self._parent
+
+    @parent.setter
+    def parent(self, parent_id):
+        self._parent = parent_id
+        self._T_is_updated = False
+
+    def add_child(self, child_id):
+        self.children.add(child_id)
 
     def _update_T(self):
         # T_rows is a list of np arrays s.t. T_rows[i][j, 1] is the probability of a transition i->j where j is the vertex with id T_rows[i][j][0] 
@@ -169,7 +198,11 @@ class hierarchicalMSM:
         # inform parent of change
         partition = pass #a list of lists of ids
         for children_ids in partition:
-            self.tree.add_vertex(hierarchicalMSM(self.tree, children_ids, self.parent))
+            vertex = hierarchicalMSM(self.tree, children_ids, self.parent)
+            self.tree.add_vertex(vertex)
+            self.tree.vertices[self.parent].add_child(vertex.id)
+            for child_id in children_ids:
+                self.tree.set_parent(child_id, vertex_id)
         self.tree.remove_vertex(self.id) #when this happens, all my siblings need to set _T_is_updated = False 
 
 
