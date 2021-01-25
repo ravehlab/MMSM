@@ -1,19 +1,15 @@
 from HMSM.util import get_unique_id
 
+all = ["HierarchicalMarkovTree", "HierarchicalMSM"]
+
 class HierarchicalMarkovTree:
 
-    # each vertex is an object. Has a pointer to it's children and its parent
-
-    # each vertex needs to have a pointer to its parent and all of its children, and needs to be aware (through its parent or children probably) of its siblings.
-    # through its parent - seems to make intuitive sense, structuraly.
-    # through its children - they know about the actual transition probability. If v is my child, and v->u, where v is my nephew, when I get v's transition probabilities,
-    # it will tell me about u. Since u isnt my child, I will ask it "who's your daddy?", then add an edge from v to u's parents vertex.
     def __init__(self):
         self.microstate_parents = dict()
-        self.microstate_counts = util.count_dict(depth=2) #TODO debug this
+        self.microstate_counts = util.count_dict(depth=2)
         self.microstate_MMSE = dict()
-        self.cluster_indices = [] #cluster_indices[j] is the id of the j'th cluster
-        self.microstate_indices = dict() #microstate_indices[id]==j iff cluster_indices[j]==id
+
+        self.coarse_grain = pass
 
         self.vertices = dict()
 
