@@ -1,4 +1,5 @@
-from HMSM.util import util.get_unique_id 
+from HMSM.util import util
+import numpy as np
 
 all = ["HierarchicalMarkovTree", "HierarchicalMSM"]
 
@@ -15,7 +16,7 @@ class HierarchicalMarkovTree:
 
     def _assert_valid_vertex(self, vertex_id):
         return self._is_microstate(vertex_id) or \
-               (self.vertices.get(vertex_id) is not None):
+               (self.vertices.get(vertex_id) is not None)
 
     def _is_microstate(self, vertex_id):
         if self.microstate_parents.get(vertex_id) is None:
@@ -53,7 +54,7 @@ class HierarchicalMarkovTree:
         if self._is_microstate(vertex_id):
             return self.microstate_MMSE[vertex_id]
         else:
-            return self.get_vertex(vertex_id).get_external_T()
+            return self.vertices[vertex_id].get_external_T()
 
     def update_transition_counts(self, dtrajs, update_MMSE=True):
         updated_microstates = set()
@@ -71,14 +72,14 @@ class HierarchicalMarkovTree:
 
         for vertex_id in updated_microstates:
             if self._check_parent_update_condition(vertex_id):
-                parent_id = self.microstate_parents(vertex_id)
+                parent_id = self.microstate_parents[vertex_id]
                 self.vertices[parent_id].update_T()
 
     def _dirichlet_MMSE(self, vertex_id):
-            MMSE_ids = np.array(list(self.microstate_counts[vertex_id].keys()))
-            MMSE_counts = np.array(list(self.microstate_counts[vertex_id].values())) + self.alpha
-            MMSE_counts = MMSE_counts/np.sum(MMSE_counts)
-            return np.array([MMSE_ids, MMSE_counts])
+        MMSE_ids = np.array(list(self.microstate_counts[vertex_id].keys()))
+        MMSE_counts = np.array(list(self.microstate_counts[vertex_id].values())) + self.alpha
+        MMSE_counts = MMSE_counts/np.sum(MMSE_counts)
+        return np.array([MMSE_ids, MMSE_counts])
 
     def _check_parent_update_condition(self, microstate):
         pass
@@ -95,7 +96,7 @@ class HierarchicalMarkovTree:
         parent_id = self.vertices[vertex_id].parent
         parent = self.vertices[parent_id]
         parent.remove_child(vertex_id)
-        del self.vertices[vertex.id]
+        del self.vertices[vertex_id]
         self.update_vertex(parent_id)
 
     def update_vertex(self, vertex_id):
@@ -116,16 +117,21 @@ class hierarchicalMSM:
         self.split_method = split_method
         self.sample_method = sample_method
 
+        self._T_is_updated = False
+
     @property
     def children(self):
         return self._children.copy()
 
     @property
+    def n(self):
+        return len(self._children)
+    @property
     def id(self):
         return self.__id
 
     @property
-    def T(self)
+    def T(self):
         assert self._T_is_updated
         return self._T
 
@@ -153,9 +159,12 @@ class hierarchicalMSM:
         if update_parent and self._check_parent_update_condition():
             self.tree.update_vertex(self.parent)
 
+    def _check_parent_update_condition(self):
+        pass
+
     def _update_T(self):
         # T_rows is a list of np arrays s.t. T_rows[i][j, 1] is the probability of a transition i->j where j is the vertex with id T_rows[i][j][0]
-        T_rows = [tree.get_external_T(child, self.tau) for child in self._children]
+        T_rows = [self.tree.get_external_T(child, self.tau) for child in self._children]
         column_ids = self._children.union([T_row[0] for T_row in T_rows])
         id_2_index, n_cols = self._get_id_2_index_map(column_ids)
         n_rows = n_cols
@@ -165,12 +174,12 @@ class hierarchicalMSM:
         for i, T_row in enumerate(T_rows):
             for _j, id in enumerate(T_row[0]):
                 j = id_2_index[id]
-                self_T[i,j] = T_row[1,_j]
+                self._T[i,j] = T_row[1,_j]
         self._T_is_updated = True #Set this to false to always recalculate T
 
         #make the external vertices sinks
         n_external = n_cols - self.n
-        self_T[self.n:, self.n:] = np.eye(n_external)
+        self._T[self.n:, self.n:] = np.eye(n_external)
 
         if self._check_split_condition():
             self.split()
@@ -182,7 +191,7 @@ class hierarchicalMSM:
         id_2_parent_id = dict()
         ids_to_remove = []
         for j, column_id in enumerate(column_ids):
-            parent = get_parent(column_id)
+            parent = self.tree.get_parent(column_id)
             if parent != self.id:
                 # remove them at the end to not change indices while looping
                 ids_to_remove.append(j)
@@ -200,6 +209,9 @@ class hierarchicalMSM:
             id_2_index[id] = id_2_index[id_2_parent_id[id]]
         n_cols = column_ids.shape[0]
         return id_2_index, n_cols
+
+    def get_local_stationary_distribution(self):
+        pass
 
     def get_external_T(self, external_tau):
         # returns an (m,2) array as specified in _update_T. This should be the MMSE estimator of the row.
