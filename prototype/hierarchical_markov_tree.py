@@ -9,8 +9,6 @@ class HierarchicalMarkovTree:
         self.microstate_counts = util.count_dict(depth=2)
         self.microstate_MMSE = dict()
 
-        self.coarse_grain = pass
-
         self.vertices = dict()
 
         self.alpha = 1 # parameter of the dirichlet prior
@@ -43,25 +41,34 @@ class HierarchicalMarkovTree:
         else:
             self.vertices[child_id].parent = parent_id
 
+    def get_parent(self, child_id):
+        if not self._assert_valid_vertex(child_id):
+            raise ValueError("Got child_id for non-existing id")
+
+        if self._is_microstate(child_id):
+            return self.microstate_parents[child_id]
+        else:
+            return self.vertices[child_id].parent.id
+
+
     def get_external_T(self, vertex_id):
-        if self.microstate_parents.get(vertex_id): # if this is a microstate
+        if self._is_microstate(vertex_id):
             return self.microstate_MMSE[vertex_id]
         else:
-            return self.get_vertex(vertex_id).get_external_T
+            return self.get_vertex(vertex_id).get_external_T()
 
-    def update_transition_counts(self, dtrajs, dt=1, update_MMSE=True):
-        #TODO what dt are the dtrajs in? 
-        updated = set()
+    def update_transition_counts(self, dtrajs, update_MMSE=True):
+        updated_microstates = set()
         for dtraj in dtrajs:
             src = dtraj[0]
-            updated.add(src)
-            for i in range(1, len(dtraj), dt):
+            updated_microstates.add(src)
+            for i in range(1, len(dtraj)):
                 dst = dtraj[i]
                 self.microstate_counts[src, dst] += 1
                 src = dst
 
         if update_MMSE:
-            for vertex_id in updated:
+            for vertex_id in updated_microstates:
                 self.microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
 
     def _dirichlet_MMSE(self, vertex_id):
@@ -71,7 +78,7 @@ class HierarchicalMarkovTree:
             return np.array([MMSE_ids, MMSE_counts])
 
     def add_vertex(self, vertex):
-        assert vertex.tree is self 
+        assert vertex.tree is self
         assert isinstance(vertex, hierarchicalMSM)
         self.vertices[vertex.id] = vertex
 
@@ -81,27 +88,38 @@ class HierarchicalMarkovTree:
 
         parent_id = self.vertices[vertex_id].parent
         parent = self.vertices[parent_id]
+        parent.remove_child(vertex_id)
         del self.vertices[vertex.id]
-        del parent.children[vertex_id]
         parent._T_is_updated = False
- 
+
 class hierarchicalMSM:
 
-    def __init__(self, tree, children, parent, tau=None):
+    def __init__(self, tree, children, parent, tau, split_condition=None, split_method=None, sample_method=None):
         self.tree = tree
-        self.children = children
+        self._children = children # should be a set
         self.parent = parent
         self.tau = tau
-        self.id = util.get_unique_id()
+        self.__id = util.get_unique_id()
+
+        self.split_condition = split_condition
+        self.split_method = split_method
+        self.sample_method = sample_method
+
+    @property
+    def children(self):
+        return self._children.copy()
+
+    @property
+    def id(self):
+        return self.__id
 
     @property
     def T(self)
-        #TODO level0 and level>0 handle this differently, although maybe this just should never be called on a level0 MSM.
         if self._T_is_updated:
             return self._T
         else:
             return self._update_T
-    
+
     @property
     def parent(self):
         return self._parent
@@ -112,12 +130,17 @@ class hierarchicalMSM:
         self._T_is_updated = False
 
     def add_child(self, child_id):
-        self.children.add(child_id)
+        self._children.add(child_id)
+        self.tree.set_parent(self.id)
+
+    def remove_child(self, child_id):
+        self._children.discard(child_id)
+        #TODO update remaining children
 
     def _update_T(self):
-        # T_rows is a list of np arrays s.t. T_rows[i][j, 1] is the probability of a transition i->j where j is the vertex with id T_rows[i][j][0] 
-        T_rows = [tree.get_external_T(child, self.tau) for child in self.children] 
-        column_ids = list(np.unique([T_row[0] for T_row in T_rows]))
+        # T_rows is a list of np arrays s.t. T_rows[i][j, 1] is the probability of a transition i->j where j is the vertex with id T_rows[i][j][0]
+        T_rows = [tree.get_external_T(child, self.tau) for child in self._children]
+        column_ids = self._children.union([T_row[0] for T_row in T_rows])
         id_2_index, n_cols = self._get_id_2_index_map(column_ids)
         n_rows = n_cols
         self._T = np.zeros((n_rows, n_cols))
@@ -136,15 +159,15 @@ class hierarchicalMSM:
         #save the ids of the indices
         self.index_2_id = util.inverse_dict(id_2_index)
         return self._T
-    
-    def _get_id_2_index_map(self, column_ids):
+
+    def _get_id_2_index_map(self, column_ids): #TODO column_ids is a set, need to update this function accordingly
         id_2_parent_id = dict()
         ids_to_remove = []
         for j, column_id in enumerate(column_ids):
             parent = get_parent(column_id)
             if parent != self.id:
                 # remove them at the end to not change indices while looping
-                ids_to_remove.append(j) 
+                ids_to_remove.append(j)
                 id_2_parent_id[column_id] = parent
                 if parent not in column_ids:
                     column_ids.append(parent)
@@ -157,23 +180,23 @@ class hierarchicalMSM:
             id_2_index[id] = j
         for id in id_2_parent_id:
             id_2_index[id] = id_2_index[id_2_parent_id[id]]
-        n_cols = column_ids.shape[0] 
+        n_cols = column_ids.shape[0]
         return id_2_index, n_cols
 
     def get_external_T(self, external_tau):
         # returns an (m,2) array as specified in _update_T. This should be the MMSE estimator of the row.
         T = self.T
         n = self.n
-        local_stationary = self.get_local_stationary_distribution()
+        local_stationary = self.get_local_stationary_distribution() #TODO implement this
         local_stationary.resize(T.shape[0]) # pad with 0's. TODO make sure there are no references to local_stationary
         # T on the timescale of external_tau:
-        T_ext_tau = np.linalg.matrix_power(T, external_tau//self.tau) 
-        # the distribution over states in external_tau steps, starting from the 
+        T_ext_tau = np.linalg.matrix_power(T, external_tau//self.tau)
+        # the distribution over states in external_tau steps, starting from the
         # local stationary distribution:
         full_transition_probabilities = local_stationary.dot(T_ext_tau)
 
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
-        # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability, 
+        # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,
         # a random walk mixes before leaving this MSM.
         # This could be used as validation, and maybe as a clustering criteria.
 
@@ -188,17 +211,22 @@ class hierarchicalMSM:
 
         return external_T
 
-    def split(self, max_timescale):
-        # do PCCA to get partition compatible with max_timescale
-        # create new vertices according to this partition
-        # inform parent of change
-        partition = pass #a list of lists of ids
-        for children_ids in partition:
-            vertex = hierarchicalMSM(self.tree, children_ids, self.parent)
+    def _get_partition(self):
+        # return (partition, taus) where partition is an iterable of iterables of children_ids
+        # use self.split_method. Need to decide what parameters it will take
+        pass
+
+    def split(self):
+        # 1. get partition compatible with max_timescale
+        # 2. create new vertices according to this partition
+        # 3. update tree structure
+        partition, taus = self._get_partition()
+        for i, children_ids in enumerate(partition):
+            vertex = hierarchicalMSM(self.tree, children_ids, self.parent, taus[i])
             self.tree.add_vertex(vertex)
             self.tree.vertices[self.parent].add_child(vertex.id)
             for child_id in children_ids:
                 self.tree.set_parent(child_id, vertex_id)
-        self.tree.remove_vertex(self.id) #when this happens, all my siblings need to set _T_is_updated = False 
+        self.tree.remove_vertex(self.id) #when this happens, all my siblings need to set _T_is_updated = False
 
 
