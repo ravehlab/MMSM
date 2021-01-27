@@ -1,4 +1,4 @@
-from HMSM.util import get_unique_id
+from HMSM.util import util.get_unique_id 
 
 all = ["HierarchicalMarkovTree", "HierarchicalMSM"]
 
@@ -24,7 +24,7 @@ class HierarchicalMarkovTree:
             return True
 
     def _init_unseen_vertex(self):
-        self.unseen_id = get_unique_id()
+        self.unseen_id = util.get_unique_id()
         self.microstate_parents[self.unseen_id] = self.unseen_id
         self.microstate_counts = np.array([self.unseen_id, 1])
 

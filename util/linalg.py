@@ -3,6 +3,8 @@ import matplotlib as mpl
 from numpy.linalg import LinAlgError
 from sklearn.cluster import MiniBatchKMeans
 
+sample_from_ndarray = lambda array, n : array[np.random.choice(array.shape[0], n, replace=False)] \
+                                        if n<=array.shape[0] else array.copy()
 
 def _assert_2d(array):
     if array.ndim != 2:

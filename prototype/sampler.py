@@ -1,5 +1,7 @@
 from coarse_grain import K_CentersCoarseGrain
 
+__all__ = ["SimpleSampler"]
+
 class SimpleSampler:
 
     def __init__(self, force, dim, dt, kT, coarse_grain_type=K_CentersCoarseGrain, **coarse_grain_args):

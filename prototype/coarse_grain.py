@@ -1,5 +1,7 @@
 from HMSM.util.clustering import k_centers, extend_k_centers
 
+__all__ = ["K_CentersCoarseGrain"]
+
 class K_CentersCoarseGrain:
 
     def __init__(self, cutoff, representative_sample_size=10):
