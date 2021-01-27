@@ -1,5 +1,7 @@
+from functools import reduce
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from msmtools import pcca
 
 __all__ = ["k_centers", "extend_k_centers"]
 
@@ -108,3 +110,34 @@ def extend_k_centers(data, nn, centers, cutoff):
         i += 1
         _k_centers_step(i, data, clusters, centers, distances)
     return NearestNeighbors(n_neighbors=1, algorithm='auto').fit(centers), clusters
+
+def normalized_laplacian(P):
+    N = P.shape[0]
+    D = np.diag(np.power(np.sum(P, axis=1), -0.5)) #D^-1/2
+    L = np.eye(N) - reduce(np.matmul, [D, P, D])
+    return L
+
+def spectral(P, k, eig=None, return_eig=False):
+    """
+    Cluster the data into k clusters using the spectral clustering algorithm.
+    :param P: A transition probability matrix
+    :param k: The number of desired clusters.
+    :return: clustering an np.ndarray such that clustering[i] is the assignment of the i'th vertex
+    """
+    # Sometimes we may call this function many times on the same X, so we want to be able to 
+    # calculate the eigenvectors once in advance, because that may be the heaviest part computationally
+    if eig != None:
+        e_vals, e_vecs = eig
+    else:
+        L = normalized_laplacian(P)
+        e_vals, e_vecs = np.linalg.eigh(L) # gen the eigenvectors
+    if return_eig:
+        eig = e_vals, e_vecs
+    
+    k_smallest = np.argpartition(e_vals, k)[:k]
+    e_vecs = e_vecs.T[k_smallest]
+    e_vecs = e_vecs/np.linalg.norm(e_vecs.T, axis=1) # project them to the unit circle
+    clusters = KMeans(n_clusters=k).fit_predict(e_vecs.T)
+    if return_eig:
+        return clusters, eig
+    return clusters
