@@ -1,7 +1,6 @@
 from functools import reduce
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from msmtools import pcca
 
 __all__ = ["k_centers", "extend_k_centers"]
 
