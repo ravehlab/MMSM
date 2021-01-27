@@ -8,7 +8,7 @@ class K_CentersCoarseGrain:
 
     def __init__(self, cutoff, representative_sample_size=10):
         self.nearest_neighbors = None
-        self.centers = None
+        self.centers = []
         self.nn = None
         self._k_centers_initiated = False
         self.cluster_inx_2_id = dict()
@@ -25,6 +25,7 @@ class K_CentersCoarseGrain:
 
 
     def get_coarse_grained_clusters(self, data : np.ndarray):
+        n_clusters = self.n_clusters
         if self._k_centers_initiated:
             self.nn, clusters, self.centers = extend_k_centers(data, self.nn, \
                                                                self.centers, self.cutoff)
@@ -32,8 +33,9 @@ class K_CentersCoarseGrain:
             self.nn, clusters, self.centers = k_centers(data, cutoff=self.cutoff)
             self._k_centers_initiated = True
 
-        if np.max(clusters) > self.n_clusters-1:
-            new_clusters = np.unique(clusters[np.where(clusters>self.n_clusters-1)])
+        if np.max(clusters) > n_clusters-1:
+            new_clusters = np.unique(clusters)
+            #new_clusters = new_clusters[np.where(new_clusters > (n_clusters-1))]
             self._add_clusters(new_clusters)
 
         self._sample_representatives(clusters, data)
@@ -50,6 +52,8 @@ class K_CentersCoarseGrain:
 
     def _add_clusters(self, new_clusters):
         for cluster in new_clusters:
+            if self.cluster_inx_2_id.get(cluster):
+                continue
             self.cluster_inx_2_id[cluster] = util.get_unique_id()
 
     def _sample_representatives(self, clusters, data):
@@ -59,14 +63,14 @@ class K_CentersCoarseGrain:
         the number of points x' that have been observed in j.
         """
         for i, cluster_index in enumerate(clusters):
-            self.cluster_count[cluster_index] += 1
             cluster_id = self.cluster_inx_2_id[cluster_index]
+            self.cluster_count[cluster_id] += 1
             if not self.representatives.get(cluster_id):
                 # If this is the first observation of this cluster
                 self.representatives[cluster_id] = [data[i]]
             elif len(self.representatives[cluster_id] ) < self.representative_sample_size:
                 self.representatives[cluster_id].append(data[i])
-            elif np.random.random() <= (1/self.cluster_count[cluster_index]):
+            elif np.random.random() <= (1/self.cluster_count[cluster_id]):
                 # with probability 1/n, keep this point. It can be proven easily by induction
                 # that this gives the desired property.
                 random_index = np.random.randint(self.representative_sample_size)

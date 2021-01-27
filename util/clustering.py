@@ -108,7 +108,7 @@ def extend_k_centers(data, nn, centers, cutoff):
     while np.max(distances) >= cutoff:
         i += 1
         _k_centers_step(i, data, clusters, centers, distances)
-    return NearestNeighbors(n_neighbors=1, algorithm='auto').fit(centers), clusters
+    return NearestNeighbors(n_neighbors=1, algorithm='auto').fit(centers), clusters, centers
 
 def normalized_laplacian(P):
     N = P.shape[0]
