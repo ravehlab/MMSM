@@ -1,4 +1,5 @@
-from HMSM.util import util
+from HMSM.util import util, linalg
+from msmtools.analysis.dense.stationary_vector import stationary_distribution
 import numpy as np
 
 all = ["HierarchicalMarkovTree", "HierarchicalMSM"]
@@ -212,9 +213,9 @@ class hierarchicalMSM:
             self.tree.update_vertex(child)
         self.update()
 
-    def update(self, update_parent=True):
+    def update(self):
         self._update_T()
-        if update_parent and self._check_parent_update_condition():
+        if self._check_parent_update_condition():
             self.tree.update_vertex(self.parent)
 
     def _check_parent_update_condition(self):
@@ -258,7 +259,10 @@ class hierarchicalMSM:
         return id_2_index, full_n
 
     def get_local_stationary_distribution(self):
-        pass
+        n = self.n
+        T = self.T[:n, :n]
+        T = linalg.normalize_rows(T)
+        return stationary_distribution(T)
 
     def get_external_T(self, external_tau):
         # returns an (m,2) array as specified in _update_T. This should be the MMSE estimator of the row.
@@ -288,12 +292,11 @@ class hierarchicalMSM:
 
         return external_T
     def _check_split_condition(self):
-        pass
+        return self.config.split_condition(self)
 
     def _get_partition(self):
         # return (partition, taus) where partition is an iterable of iterables of children_ids
-        # use self.split_method. Need to decide what parameters it will take
-        pass
+        return self.config.split_method(self)
 
     def split(self):
         # 1. get partition compatible with max_timescale
