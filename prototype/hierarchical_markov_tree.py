@@ -222,17 +222,21 @@ class hierarchicalMSM:
         pass
 
     def _update_T(self):
-        # T_rows is a list of np arrays s.t. T_rows[i][j, 1] is the probability of a transition i->j where j is the vertex with id T_rows[i][j][0]
-        T_rows = [self.tree.get_external_T(child, self.tau) for child in self._children]
-        column_ids = self._children.union([T_row[0] for T_row in T_rows])
+        T_rows = []
+        T_ids = []
+        column_ids = self.children
+        for child in self._children:
+            ids, row = self.tree.get_external_T(child)
+            T_rows.append(row)
+            T_ids.append(ids)
+            column_ids = self._children.union(ids)
         id_2_index, full_n = self._get_id_2_index_map(column_ids)
         self._T = np.zeros((full_n, full_n))
 
-        #TODO maybe vectorize this?
         for i, T_row in enumerate(T_rows):
-            for _j, id in enumerate(T_row[0]):
-                j = id_2_index[id]
-                self._T[i,j] = T_row[1,_j]
+            for _j, i_2_j_probability in enumerate(T_row):
+                j = id_2_index[T_ids[i,_j]] 
+                self._T[i,j] = T_row[_j]
         self._T_is_updated = True #Set this to false to always recalculate T
 
         #make the external vertices sinks
@@ -264,33 +268,41 @@ class hierarchicalMSM:
         T = linalg.normalize_rows(T)
         return stationary_distribution(T)
 
-    def get_external_T(self, external_tau):
-        # returns an (m,2) array as specified in _update_T. This should be the MMSE estimator of the row.
+    def get_external_T(self, ext_tau=1):
+        # returns: ext_T: an (m,2) array, such that if ext_T[j] = v,p, then p is the probability
+        # of a transition from this vertex to the vertex v.
         T = self.T
         n = self.n
-        local_stationary = self.get_local_stationary_distribution() #TODO implement this
-        local_stationary.resize(T.shape[0]) # pad with 0's. TODO make sure there are no references to local_stationary
-        # T on the timescale of external_tau:
-        T_ext_tau = np.linalg.matrix_power(T, external_tau//self.tau)
-        # the distribution over states in external_tau steps, starting from the
-        # local stationary distribution:
-        full_transition_probabilities = local_stationary.dot(T_ext_tau)
+        local_stationary = self.get_local_stationary_distribution()
+        local_stationary.resize(T.shape[0]) # pad with 0's.
+        
+        full_transition_probabilities = local_stationary.dot(T)
+        external_T = np.ndarray(T.shape[0]-self.n + 1)
+        ids = np.ndarray(T.shape[0]-self.n + 1)
+
+        # the probability of staying in this vertex in external_tau steps:
+        external_T[0] = np.sum(full_transition_probabilities[:n])
+        # the probability of getting to neighboring vertices:
+        external_T[1:] = full_transition_probabilities[n:]
+
+        ids[0] = self.id
+        for j in range(n, T.shape[0]):
+            ids[j] = self.index_2_id[j]
 
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
         # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,
         # a random walk mixes before leaving this MSM.
         # This could be used as validation, and maybe as a clustering criteria.
 
-        external_T = np.ndarray((2, T.shape[0]-self.n+1))
-        # the probability of staying in this vertex in external_tau steps:
-        external_T[0,0] = self.id
-        external_T[0,1] = np.sum(full_transition_probabilities[:n])
+        if ext_tau != 1:
+            # if we were to do the same calculation as above but with T^{ext_tau}, this would be
+            # the result:
+            external_T[0] = np.power(external_T[0], ext_tau) # The probability of no transition
+            # The relative probabilities of the other transitions havent changes, so normalize:
+            external_T[1:] = external_T*(1-external_T[0])/np.sum(external_T[:,1])
 
-        external_T[1:,1] = full_transition_probabilities[n:]
-        for j in range(n, T.shape[0]):
-            external_T[j, 0] = self.index_2_id[j]
+        return ids, external_T
 
-        return external_T
     def _check_split_condition(self):
         return self.config.split_condition(self)
 
