@@ -11,7 +11,7 @@ class SimpleSampler:
         self.dt = dt
         self.kT = kT
         self.coarse_grain = coarse_grain_type(**coarse_grain_args)
-        self.noise_magnitude = np.sqrt(2*self.dim + self.dt)
+        self.noise_magnitude = np.sqrt(2*self.dim * self.kT * self.dt)
 
     def sample_from_microstate(self, microstate, sample_len, n_samples, tau):
         trajs = []
