@@ -191,7 +191,7 @@ class hierarchicalMSM:
 
     @property
     def T(self):
-        assert self._T_is_updated
+        assert self._T_is_updated, "T should be updated before accessing."
         return self._T
 
     @property
