@@ -17,10 +17,10 @@ class HierarchicalMarkovTree:
         self.alpha = 1 # parameter of the dirichlet prior
 
         self.height = 1
-        self.root = HierarchicalMSM((self, children=set(),\
+        self.root = HierarchicalMSM(self, children=set(),\
                                            parent=None,\
                                            tau=1,\
-                                           config=config))
+                                           config=config)
 
     def _assert_valid_vertex(self, vertex_id):
         return self._is_microstate(vertex_id) or \
@@ -153,7 +153,7 @@ class HierarchicalMarkovTree:
 
     def sample_random_walk(self, length, start=None):
         sample = np.ndarray(length)
-        if start = None:
+        if start == None:
             start = np.random.choice(list(self.microstate_MMSE.keys()))
         current = start
         for i in range(length):

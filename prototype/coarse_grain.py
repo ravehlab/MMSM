@@ -35,9 +35,9 @@ class K_CentersCoarseGrain:
 
         if np.max(clusters) > n_clusters-1:
             new_clusters = np.unique(clusters)
-            #new_clusters = new_clusters[np.where(new_clusters > (n_clusters-1))]
+            new_clusters = new_clusters[np.where(new_clusters > (n_clusters-1))]
             self._add_clusters(new_clusters)
-
+    
         self._sample_representatives(clusters, data)
 
         return self._get_ids(clusters)

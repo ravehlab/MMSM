@@ -1,3 +1,4 @@
+from functools import reduce
 import numpy as np
 import matplotlib as mpl
 from numpy.linalg import LinAlgError
@@ -112,29 +113,12 @@ def connected_components(E):
 
 def normalize_rows(matrix:np.ndarray, norm:int=2)->np.ndarray:
     _assert_finite(matrix)
-    return matrix/np.linalg.norm(matrix, norm, axis=1)[:, None]
-
-def metastable_clustering(trans_p:np.ndarray) -> (MiniBatchKMeans, int):
-    """metastable_clustering.
-
-    Parameters
-    ----------
-    trans_p : np.ndarray
-        trans_p
-
-    Returns
-    -------
-    (MiniBatchKmeans, int)
-
-    """
-    _assert_valid_transition_matrix(trans_p)
-    # Naive spectral clustering on the graph
-    # TODO either find justification for this, or use a method from the literature, i.e. PCCA+
-    eig_vals, eig_vecs = np.linalg.eig(trans_p)
-    sort = eig_vals.argsort()[::-1] # sort in descending order
-    m = round(np.abs(np.sum(eig_vals))+1) # this seems to be a good heuristic
-    projection = eig_vecs[:, sort][:, 1:m+1]
-    projection = np.real(projection) # sometimes we get complex rounding errors
-    return MiniBatchKMeans(n_clusters=m).fit_predict(projection), m
+    normalized = matrix/np.linalg.norm(matrix, norm, axis=1)[:, None]
+    return np.nan_to_num(normalized)
 
 
+def normalized_laplacian(P):
+    N = P.shape[0]
+    D = np.diag(np.power(np.sum(P, axis=1), -0.5)) #D^-1/2
+    L = np.eye(N) - reduce(np.matmul, [D, P, D])
+    return L
