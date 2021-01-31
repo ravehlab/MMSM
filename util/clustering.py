@@ -1,8 +1,10 @@
-from functools import reduce
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
+from .linalg import normalize_rows, normalized_laplacian
 
-__all__ = ["k_centers", "extend_k_centers"]
+__all__ = ["k_centers", "extend_k_centers", "gibbs_metastable_clustering", "spectral"]
+
 
 def _k_centers_step(i, data, clusters, centers, distances):
     """_k_centers_step.
@@ -73,7 +75,7 @@ def k_centers(data : np.ndarray, k=None, cutoff=None):
         i += 1
         _k_centers_step(i, data, clusters, centers, distances)
     return NearestNeighbors(n_neighbors=1, algorithm='auto').fit(centers), clusters, centers
-    
+
 def extend_k_centers(data, nn, centers, cutoff):
     """extend_k_centers.
     Given a set of center points, and a new set of data points, extends the list of centers
@@ -106,15 +108,10 @@ def extend_k_centers(data, nn, centers, cutoff):
     i = len(centers)
 
     while np.max(distances) >= cutoff:
-        i += 1
         _k_centers_step(i, data, clusters, centers, distances)
+        i += 1
     return NearestNeighbors(n_neighbors=1, algorithm='auto').fit(centers), clusters, centers
 
-def normalized_laplacian(P):
-    N = P.shape[0]
-    D = np.diag(np.power(np.sum(P, axis=1), -0.5)) #D^-1/2
-    L = np.eye(N) - reduce(np.matmul, [D, P, D])
-    return L
 
 def spectral(P, k, eig=None, return_eig=False):
     """
@@ -123,16 +120,18 @@ def spectral(P, k, eig=None, return_eig=False):
     :param k: The number of desired clusters.
     :return: clustering an np.ndarray such that clustering[i] is the assignment of the i'th vertex
     """
-    # Sometimes we may call this function many times on the same X, so we want to be able to 
+    # Sometimes we may call this function many times on the same X, so we want to be able to
     # calculate the eigenvectors once in advance, because that may be the heaviest part computationally
     if eig != None:
         e_vals, e_vecs = eig
     else:
         L = normalized_laplacian(P)
-        e_vals, e_vecs = np.linalg.eigh(L) # gen the eigenvectors
+        e_vals, e_vecs = np.linalg.eig(L) # gen the eigenvectors
     if return_eig:
         eig = e_vals, e_vecs
-    
+
+    e_vals = np.real(e_vals)
+    e_vecs = np.real(e_vecs)
     k_smallest = np.argpartition(e_vals, k)[:k]
     e_vecs = e_vecs.T[k_smallest]
     e_vecs = e_vecs/np.linalg.norm(e_vecs.T, axis=1) # project them to the unit circle
@@ -140,3 +139,49 @@ def spectral(P, k, eig=None, return_eig=False):
     if return_eig:
         return clusters, eig
     return clusters
+
+def gibbs_metastable_clustering(T, tau, max_k, init='spectral', \
+                                min_iter=50, max_iter=250, mle_fraction=0.2):
+    if init=='spectral':
+        initial_clustering = spectral(T, max_k)
+    else:
+        initial_clustering=None
+
+    n = T.shape[0]
+    n_iter = min([n, max_iter])
+    n_iter = max([n_iter, min_iter])
+    gibbs_clusters = _rw_gibbs(T, max_k, tau, n_iter, initial_clustering)
+    return  _get_MLE_clusters(gibbs_clusters, n, mle_fraction)
+
+def _rw_gibbs(p, k, tau=1, n_iter=10, init=None):
+    n = p.shape[0]
+    T = np.linalg.matrix_power(p, tau)
+    clusters = np.zeros((n_iter+1,n,k))
+    if init is None:
+        for i in range(n):
+            clusters[0, i, np.random.choice(k)] = 1
+    else:
+        for i in range(n):
+            clusters[0, i, init[i]] = 1
+
+    # RANDOM WALK:
+    for it in range(n_iter):
+        # next_step[i,j] gives the probability of the i'th vertex landing on a vertex with color
+        # j, given the coloring from the previous iteration.
+        next_step = T.dot(clusters[it])
+        next_step = normalize_rows(next_step, norm=1) # to avoid numerical issues
+        for vertex in range(n):
+            # now choose a coloring from the distribution defined above for the next iteration
+            color = np.random.choice(k, p=next_step[vertex])
+            clusters[it+1][vertex, color] = 1
+    return clusters
+
+
+def _get_MLE_clusters(clusters, n, fraction):
+    # clusters is an array of shape (n_iter, n, k), s.t. clusters[it,i,j]==1 iff i was colored j
+    # in iteration it
+    n_iter = clusters.shape[0]
+    n_samples = int(np.ceil(n_iter * fraction))
+    sample = np.sum(clusters[-n_samples:], axis=0) # sample[i,j] is the number of times i was
+                                                   #colored j in the final n_samples iterations
+    return np.argmax(sample, axis=1)
