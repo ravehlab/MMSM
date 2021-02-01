@@ -152,7 +152,11 @@ def gibbs_metastable_clustering(T, tau, max_k, init='spectral', manual_init=None
     n_iter = min([n, max_iter])
     n_iter = max([n_iter, min_iter])
     gibbs_clusters = _rw_gibbs(T, max_k, tau, n_iter, initial_clustering, maximum_likelihood)
-    return  _get_MLE_clusters(gibbs_clusters, n, mle_fraction)
+    if maximum_likelihood:
+        # the last iteration _is_ the MLE, so we only need one sample
+        return  _get_MLE_clusters(gibbs_clusters, n_samples=1) 
+    else:
+        return  _get_MLE_clusters(gibbs_clusters, mle_fraction)
 
 def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True):
     n = p.shape[0]
@@ -180,14 +184,18 @@ def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True):
             clusters[it+1][vertex, color] = 1
         if maximum_likelihood and np.all(clusters[it+1]==clusters[it]):
             return clusters[:it+2]
+
+    if maximum_likelihood:
+        raise UserWarning("gibbs_metastable_clustering didn't converge, try increasing max_iter")
     return clusters
 
 
-def _get_MLE_clusters(clusters, n, fraction):
-    # clusters is an array of shape (n_iter, n, k), s.t. clusters[it,i,j]==1 iff i was colored j
-    # in iteration it
-    n_iter = clusters.shape[0]
-    n_samples = int(np.ceil(n_iter * fraction))
+def _get_MLE_clusters(clusters, fraction=0.1, n_samples=None):
+    # clusters is an array of shape (n_iter, n, k), s.t. clusters[m,i,j]==1 iff i was colored j
+    # in iteration m
+    if n_samples is None:
+        n_iter = clusters.shape[0]
+        n_samples = int(np.ceil(n_iter * fraction))
     sample = np.sum(clusters[-n_samples:], axis=0) # sample[i,j] is the number of times i was
                                                    #colored j in the final n_samples iterations
     return np.argmax(sample, axis=1)
