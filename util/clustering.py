@@ -178,6 +178,8 @@ def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True):
             else:
                 color = np.random.choice(k, p=next_step[vertex])
             clusters[it+1][vertex, color] = 1
+        if maximum_likelihood and np.all(clusters[it+1]==clusters[it]):
+            return clusters[:it+2]
     return clusters
 
 
