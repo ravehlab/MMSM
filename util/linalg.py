@@ -122,3 +122,14 @@ def normalized_laplacian(P):
     D = np.diag(np.power(np.sum(P, axis=1), -0.5)) #D^-1/2
     L = np.eye(N) - reduce(np.matmul, [D, P, D])
     return L
+
+def get_longest_timescale(P, tau):
+    """Get the implied timescale of the second largest eigenvector of a transition matrix P with 
+    time resolution tau
+    """
+    w,v = np.linalg.eig(P)
+    two_largest = np.argpartition(-w, 2)[:2]
+    lambda_2 = w[two_largest][1]
+    t_2 = (-tau)/np.log(lambda_2)
+    return t_2
+
