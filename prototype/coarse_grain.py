@@ -1,15 +1,14 @@
+import numpy as np
 from HMSM.util.clustering import k_centers, extend_k_centers
 from HMSM.util import util
-import numpy as np
 
-__all__ = ["K_CentersCoarseGrain"]
+__all__ = ["KCentersCoarseGrain"]
 
-class K_CentersCoarseGrain:
+class KCentersCoarseGrain:
 
     def __init__(self, cutoff, representative_sample_size=10):
-        self.nearest_neighbors = None
-        self.centers = []
-        self.nn = None
+        self._centers = []
+        self._nearest_neighbors = None
         self._k_centers_initiated = False
         self.cluster_inx_2_id = dict()
 
@@ -21,23 +20,28 @@ class K_CentersCoarseGrain:
 
     @property
     def n_clusters(self):
-        return len(self.centers)
+        return len(self._centers)
+
+    @property
+    def centers(self):
+        return self._centers.copy()
 
 
     def get_coarse_grained_clusters(self, data : np.ndarray):
         n_clusters = self.n_clusters
         if self._k_centers_initiated:
-            self.nn, clusters, self.centers = extend_k_centers(data, self.nn, \
-                                                               self.centers, self.cutoff)
+            self._nearest_neighbors, clusters, self._centers = extend_k_centers(data, \
+                                                                self._nearest_neighbors, \
+                                                                self._centers, self.cutoff)
         else:
-            self.nn, clusters, self.centers = k_centers(data, cutoff=self.cutoff)
+            self._nearest_neighbors, clusters, self._centers = k_centers(data, cutoff=self.cutoff)
             self._k_centers_initiated = True
 
         if np.max(clusters) > n_clusters-1:
             new_clusters = np.unique(clusters)
             new_clusters = new_clusters[np.where(new_clusters > (n_clusters-1))]
             self._add_clusters(new_clusters)
-    
+
         self._sample_representatives(clusters, data)
 
         return self._get_ids(clusters)

@@ -1,11 +1,11 @@
-from HMSM.prototype.coarse_grain import K_CentersCoarseGrain
 import numpy as np
+from HMSM.prototype.coarse_grain import KCentersCoarseGrain
 
 __all__ = ["SimpleSampler"]
 
 class SimpleSampler:
 
-    def __init__(self, force, dim, dt, kT, coarse_grain_type=K_CentersCoarseGrain, **coarse_grain_args):
+    def __init__(self, force, dim, dt, kT, coarse_grain_type=KCentersCoarseGrain, **coarse_grain_args):
         self.force = force
         self.dim = dim
         self.dt = dt
