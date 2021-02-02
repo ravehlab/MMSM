@@ -348,6 +348,12 @@ class HierarchicalMSM:
         # 2. create new vertices according to this partition
         # 3. update tree structure
         partition, taus = self._get_partition()
+
+        if len(partition)==1:
+            raise RuntimeWarning(f"split was called, but {self.config.split_method} was unable\
+                                   to find a partition")
+            return
+
         new_vertices = []
         if self.is_root():
             self._children = set()
