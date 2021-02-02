@@ -1,15 +1,41 @@
-from HMSM.util import util, linalg
-from msmtools.analysis.dense.stationary_vector import stationary_distribution
+import warnings
 import numpy as np
+from msmtools.analysis.dense.stationary_vector import stationary_distribution
+from HMSM.util import util, linalg
 
 all = ["HierarchicalMarkovTree", "HierarchicalMSM"]
+
+def _assert_valid_config(config):
+    min_keys = ["split_condition", "split_method", "sample_method", "parent_update_threshold"]
+    for key in min_keys:
+        if config.get(key) is None:
+            raise ValueError(f"config dictionary missing required value: {key}")
+
+def max_fractional_difference(ext_T1, ext_T2):
+    #TODO put this somewhere better
+    assert ext_T1.shape == ext_T2.shape, "external_T has changed shape since last update"
+    assert ext_T1.shape[1] == 2
+    sort1 = np.argsort(ext_T1[:,0]) # sort by ids
+    sort2 = np.argsort(ext_T2[:,0]) # sort by ids
+    max_diff = 0
+
+    for i in range(len(sort1)):
+        p1 = ext_T1[sort1[i], 1]
+        p2 = ext_T2[sort2[i], 1]
+        diff = np.abs(1-(p1/p2))
+        max_diff = np.max(max_diff, diff)
+
+    return max_diff
+
 
 class HierarchicalMarkovTree:
 
     def __init__(self, config):
-        self.microstate_parents = dict()
-        self.microstate_counts = util.count_dict(depth=2)
-        self.microstate_MMSE = dict()
+        self._microstate_parents = dict()
+        self._microstate_counts = util.count_dict(depth=2)
+        self._microstate_MMSE = dict()
+        self._last_update_sent = dict()
+        _assert_valid_config(config)
         self.config = config
 
         self.vertices = dict()
@@ -20,6 +46,7 @@ class HierarchicalMarkovTree:
         self.root = HierarchicalMSM(self, children=set(),\
                                            parent=None,\
                                            tau=1,\
+                                           height=1,
                                            config=config)
 
     def _assert_valid_vertex(self, vertex_id):
@@ -30,15 +57,15 @@ class HierarchicalMarkovTree:
         return vertex_id==self.root.id
 
     def _is_microstate(self, vertex_id):
-        if self.microstate_parents.get(vertex_id) is None:
+        if self._microstate_parents.get(vertex_id) is None:
             return False
         else:
             return True
 
     def _init_unseen_vertex(self):
         self.unseen_id = util.get_unique_id()
-        self.microstate_parents[self.unseen_id] = self.unseen_id
-        self.microstate_counts = np.array([self.unseen_id, 1])
+        self._microstate_parents[self.unseen_id] = self.unseen_id
+        self._microstate_counts = np.array([self.unseen_id, 1])
 
     def set_parent(self, child_id, parent_id):
         if not self._assert_valid_vertex(parent_id):
@@ -47,7 +74,7 @@ class HierarchicalMarkovTree:
             raise ValueError("Got child_id for non-existing id")
 
         if self._is_microstate(child_id):
-            self.microstate_parents[child_id] = parent_id
+            self._microstate_parents[child_id] = parent_id
         else:
             self.vertices[child_id].parent = parent_id
 
@@ -56,7 +83,7 @@ class HierarchicalMarkovTree:
             raise ValueError("Got child_id for non-existing id")
 
         if self._is_microstate(child_id):
-            return self.microstate_parents[child_id]
+            return self._microstate_parents[child_id]
         else:
             return self.vertices[child_id].parent.id
 
@@ -64,7 +91,9 @@ class HierarchicalMarkovTree:
     def get_external_T(self, vertex_id, tau=1):
         if self._is_microstate(vertex_id):
             assert tau==1
-            return self.microstate_MMSE[vertex_id]
+            ext_T = self._microstate_MMSE[vertex_id]
+            self._last_update_sent[vertex_id] = ext_T
+            return ext_T
         else:
             return self.vertices[vertex_id].get_external_T(tau)
 
@@ -75,14 +104,14 @@ class HierarchicalMarkovTree:
             src = dtraj[0]
             for i in range(1, len(dtraj)):
                 dst = dtraj[i]
-                self.microstate_counts[src, dst] += 1
-                if self.microstate_counts[dst, src] == 0:
-                    self.microstate_counts[dst, src] = self.alpha
+                self._microstate_counts[src, dst] += 1
+                if self._microstate_counts[dst, src] == 0:
+                    self._microstate_counts[dst, src] = self.alpha
                 src = dst
 
         if update_MMSE:
             for vertex_id in updated_microstates:
-                self.microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
+                self._microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
 
         # add any newly discovered microstates
         for vertex_id in updated_microstates:
@@ -92,20 +121,20 @@ class HierarchicalMarkovTree:
         # update from the leaves upwards
         for vertex_id in updated_microstates:
             if self._check_parent_update_condition(vertex_id):
-                parent_id = self.microstate_parents[vertex_id]
+                parent_id = self._microstate_parents[vertex_id]
                 self.vertices[parent_id].update_T()
 
     def _dirichlet_MMSE(self, vertex_id):
-        MMSE_ids = np.array(list(self.microstate_counts[vertex_id].keys()))
-        MMSE_counts = np.array(list(self.microstate_counts[vertex_id].values())) + self.alpha
+        MMSE_ids = np.array(list(self._microstate_counts[vertex_id].keys()))
+        MMSE_counts = np.array(list(self._microstate_counts[vertex_id].values())) + self.alpha
         MMSE_counts = MMSE_counts/np.sum(MMSE_counts)
-        return np.array([MMSE_ids, MMSE_counts])
+        return np.array([MMSE_ids, MMSE_counts]).T
 
     def _get_new_microstate_parent(self, vertex_id):
         if self.height == 1:
-            self.microstate_parents[vertex_id] = self.root.id
-        if self.microstate_MMSE.get(vertex_id) is None:
-            self.microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
+            self._microstate_parents[vertex_id] = self.root.id
+        if self._microstate_MMSE.get(vertex_id) is None:
+            self._microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
         # sample a random walk on the microstates, until reaching one with a parent, and join
         # that one. Collect any other orphans we find along the way.
         orphans = set()
@@ -114,12 +143,18 @@ class HierarchicalMarkovTree:
         while parent is None:
             orphans.add(next_state)
             next_state = self._random_step(next_state)
-            parent = self.microstate_parents.get(next_state)
+            parent = self._microstate_parents.get(next_state)
         for orphan in orphans:
-            self.microstate_parents[orphan] = parent
+            self._microstate_parents[orphan] = parent
 
     def _check_parent_update_condition(self, microstate):
-        pass
+        if self._last_update_sent.get(microstate) is None:
+            return True
+        else:
+            max_change_factor = max_fractional_difference(self._last_update_sent[microstate], \
+                                                          self._microstate_MMSE[microstate])
+            return max_change_factor >= self.config["parent_update_threshold"]
+
 
     def add_vertex(self, vertex):
         assert vertex.tree is self
@@ -143,6 +178,7 @@ class HierarchicalMarkovTree:
                 self.update_vertex(child_id)
             self.root.update()
             self.height += 1
+            self.root.height = self.height
         else:
             parent_id = self.vertices[vertex_id].parent
             parent = self.vertices[parent_id]
@@ -158,7 +194,7 @@ class HierarchicalMarkovTree:
     def sample_random_walk(self, length, start=None):
         sample = np.ndarray(length)
         if start is None:
-            start = np.random.choice(list(self.microstate_MMSE.keys()))
+            start = np.random.choice(list(self._microstate_MMSE.keys()))
         current = start
         for i in range(length):
             current = self._random_step(current)
@@ -166,25 +202,36 @@ class HierarchicalMarkovTree:
         return sample
 
     def _random_step(self, microstate_id):
-        next_states, transition_probabilities = self.microstate_MMSE[microstate_id]
+        next_states, transition_probabilities = self._microstate_MMSE[microstate_id]
         return np.random.choice(next_states, p=transition_probabilities)
 
+    def sample_microstate(self, vertex_id=None):
+        """Get a microstate from this HMSM, ideally chosen such that sampling a random walk from
+        this microstate is expected to increase some objective function.
+
+        return: microstate_id, the id of the sampled microstate.
+        """
+        if vertex_id is None:
+            vertex_id = self.root.id
+        return self.vertices[vertex_id].sample_vertex()
 
 class HierarchicalMSM:
 
-    def __init__(self, tree, children, parent, tau, config):
+    def __init__(self, tree, children, parent, tau, height, config):
         self.tree = tree
         self._children = children # should be a set
         self.parent = parent
         self.tau = tau
+        self.height = height
         self.__id = util.get_unique_id()
+
         self.config = config
 
         self._T_is_updated = False
 
     @property
     def children(self):
-        return self._children.copy()
+        return list(self._children)
 
     @property
     def n(self):
@@ -216,6 +263,10 @@ class HierarchicalMSM:
     def is_root(self):
         return self.parent == self.id
 
+    @property
+    def parent_update_threshold(self):
+        return self.config["parent_update_threshold"]
+
     def add_child(self, child_id):
         self._children.add(child_id)
         self.tree.set_parent(child_id, self.id)
@@ -233,12 +284,18 @@ class HierarchicalMSM:
             self.tree.update_vertex(self.parent)
 
     def _check_parent_update_condition(self):
-        pass
+        if self._last_update_sent is None:
+            return True
+        else:
+            max_change_factor = max_fractional_difference(self._last_update_sent, \
+                                                          self.get_external_T())
+            return max_change_factor >= self.parent_update_threshold
+
 
     def _update_T(self):
         T_rows = []
         T_ids = []
-        column_ids = self.children
+        column_ids = set(self.children)
 
         # Get the rows of T corresponding to each child
         for child in self._children:
@@ -269,6 +326,7 @@ class HierarchicalMSM:
             self.index_2_id = util.inverse_dict(id_2_index)
 
         self._update_timescale()
+        self._update_external_T()
 
     def _get_id_2_index_map(self, column_ids):
         """Return a dict that maps each id to the index of its row/column in T, and the
@@ -303,6 +361,20 @@ class HierarchicalMSM:
     def get_external_T(self, ext_tau=1):
         # returns: ext_T: an (m,2) array, such that if ext_T[j] = v,p, then p is the probability
         # of a transition from this vertex to the vertex v.
+
+        external_T = self._external_T.copy()
+        if ext_tau != 1:
+            transitions = external_T[:1].T # just the transition probabilities, as a row vector
+            transitions[0] = np.power(transitions[0], ext_tau) # The probability of no transition
+            # The relative probabilities of the other transitions haven't changed, so normalize:
+            transitions[1:] = transitions[1:]/np.sum(transitions[:,1]) * (1-transitions[0])
+            #put the result back:
+            external_T[:1] = transitions.T
+
+        self._last_update_sent = external_T.copy()
+        return external_T
+
+    def _update_external_T(self):
         assert self._T_is_updated
         T = self._T # this is T(1) as opposed to self.T which is T(tau)
         n = self.n
@@ -322,26 +394,29 @@ class HierarchicalMSM:
         for j in range(n, T.shape[0]):
             ids[j] = self.index_2_id[j]
 
+        self._external_T = np.stack([ids, external_T]).T
+
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
         # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,
         # a random walk mixes before leaving this MSM.
         # This could be used as validation, and maybe as a clustering criterion.
 
-        if ext_tau != 1:
-            # if we were to do the same calculation as above but with T^{ext_tau}, this would be
-            # the result: (this also has the advantage of supporting non-integer ext_tau's)
-            external_T[0] = np.power(external_T[0], ext_tau) # The probability of no transition
-            # The relative probabilities of the other transitions havent changes, so normalize:
-            external_T[1:] = external_T*(1-external_T[0])/np.sum(external_T[:,1])
-
-        return ids, external_T
 
     def _check_split_condition(self):
-        return self.config.split_condition(self)
+        return self.config["split_condition"](self)
 
     def _get_partition(self):
         # return (partition, taus) where partition is an iterable of iterables of children_ids
-        return self.config.split_method(self)
+        return self.config["split_method"](self)
+
+    def _get_new_vertex_with(self, children_ids, tau):
+        vertex = HierarchicalMSM(self.tree, children_ids, self.parent, \
+                                 tau, self.height, self.config)
+        self.tree.add_vertex(vertex)
+        self.tree.vertices[self.parent].add_child(vertex.id)
+        for child_id in children_ids:
+            self.tree.set_parent(child_id, vertex.id)
+        return vertex.id
 
     def split(self):
         # 1. get partition compatible with max_timescale
@@ -350,21 +425,29 @@ class HierarchicalMSM:
         partition, taus = self._get_partition()
 
         if len(partition)==1:
-            raise RuntimeWarning(f"split was called, but {self.config.split_method} was unable\
-                                   to find a partition")
+            warnings.warn(f"split was called, but {self.config.split_method} was unable to \
+                            find a partition", RuntimeWarning)
             return
 
         new_vertices = []
         if self.is_root():
             self._children = set()
         for i, children_ids in enumerate(partition):
-            vertex = HierarchicalMSM(self.tree, children_ids, self.parent, taus[i], self.config)
-            self.tree.add_vertex(vertex)
-            self.tree.vertices[self.parent].add_child(vertex.id)
-            for child_id in children_ids:
-                self.tree.set_parent(child_id, vertex.id)
-            new_vertices.append(vertex.id)
+            new_vertex = self._get_new_vertex_with(children_ids, taus[i])
+            new_vertices.append(new_vertex)
         self.tree.add_children(self.parent, new_vertices)
         # this will trigger all the vertices on this level (the newly created ones, and the already
         # existing siblings) and the parent to update.
         self.tree.remove_vertex(self.id)
+
+    def sample_microstate(self):
+        """Get a microstate from this MSM, ideally chosen such that sampling a random walk from
+        this microstate is expected to increase some objective function.
+
+        return: microstate_id, the id of the sampled microstate.
+        """
+        sample = self.config["sample_method"](self)
+        if self.height == 1:
+            return sample
+        else:
+            return self.tree.sample_microstate(sample)
