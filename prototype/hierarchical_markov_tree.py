@@ -3,7 +3,7 @@ import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
 
-all = ["HierarchicalMarkovTree", "HierarchicalMSM"]
+all = ["HierarchicalMSMTree", "HierarchicalMSMVertex"]
 
 def _assert_valid_config(config):
     min_keys = ["split_condition", "split_method", "sample_method", "parent_update_threshold"]
@@ -28,22 +28,41 @@ def max_fractional_difference(ext_T1, ext_T2):
     return max_diff
 
 
-class HierarchicalMarkovTree:
+class HierarchicalMSMTree:
+    """HierarchicalMSMTree.
+    This class encapsulates the HMSM data structure, and provides an interface for it.
+    The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
+    class.
+    Most importantly, the method "update_transition_counts" allows the user to simply input
+    observed discrete trajectories, (in the form of an iterable of state ids), and the estimation
+    of a Hierarchical Markov Model is entirely automated - including estimating a hierarchy of
+    metastable states and transition rates between them in different timescales.
+    """
+
 
     def __init__(self, config):
+        """__init__.
+
+        Parameters
+        ----------
+        config : dict
+            A dictionary of model parameters. 
+        """
         self._microstate_parents = dict()
         self._microstate_counts = util.count_dict(depth=2)
         self._microstate_MMSE = dict()
         self._last_update_sent = dict()
-        _assert_valid_config(config)
+        _assert_valid_config(config) #TODO maybe assign default values for missing values instead?
         self.config = config
 
         self.vertices = dict()
 
-        self.alpha = 1 # parameter of the dirichlet prior
+        #TODO move to config
+        self.alpha = 1 # parameter of the dirichlet prior 
 
         self.height = 1
-        self.root = HierarchicalMSM(self, children=set(),\
+        #TODO set property for root
+        self.root = HierarchicalMSMVertex(self, children=set(),\
                                            parent=None,\
                                            tau=1,\
                                            height=1,
@@ -63,11 +82,23 @@ class HierarchicalMarkovTree:
             return True
 
     def _init_unseen_vertex(self):
+        """
+        Create the "unseen vertex" - a stand in for all possible but unobserved transitions
+        """
         self.unseen_id = util.get_unique_id()
         self._microstate_parents[self.unseen_id] = self.unseen_id
         self._microstate_counts = np.array([self.unseen_id, 1])
 
     def set_parent(self, child_id, parent_id):
+        """
+        Sets the parent of a vertex to a new vertex.
+        Parameters
+        ----------
+        child_id : int
+            the id of the child
+        parent_id : int
+            the id of the new parent
+        """
         if not self._assert_valid_vertex(parent_id):
             raise ValueError("Got parent_id for non-existing id")
         if not self._assert_valid_vertex(child_id):
@@ -79,6 +110,18 @@ class HierarchicalMarkovTree:
             self.vertices[child_id].parent = parent_id
 
     def get_parent(self, child_id):
+        """
+        Get the id of a vertex's parent vertex
+
+        Parameters
+        ----------
+        child_id : int
+            id of the vertex
+        Returns
+        -------
+        parent_id : int
+            the id of the vertex's parent
+        """
         if not self._assert_valid_vertex(child_id):
             raise ValueError("Got child_id for non-existing id")
 
@@ -89,6 +132,22 @@ class HierarchicalMarkovTree:
 
 
     def get_external_T(self, vertex_id, tau=1):
+        """
+        Get the transition probabilities between this vertex and other vertexs on the same level
+        of the tree.
+
+        Parameters
+        ----------
+        vertex_id : int
+            the id of the vertex
+        tau : int
+            the time-resolution of the transitions
+        Returns
+        -------
+        ext_T : np.ndarray
+            an (m,2) array such that if ext_T[j] = [v,p] then p is the probability of a transition
+            from this vertex to the vertex with id v in tau steps
+        """
         if self._is_microstate(vertex_id):
             assert tau==1
             ext_T = self._microstate_MMSE[vertex_id]
@@ -98,6 +157,16 @@ class HierarchicalMarkovTree:
             return self.vertices[vertex_id].get_external_T(tau)
 
     def update_transition_counts(self, dtrajs, update_MMSE=True):
+        """
+        Update the Hierarchical MSM with data from observed discrete trajectories.
+
+        Parameters
+        ----------
+        dtrajs : iterable
+            an iterable of ids of states
+        update_MMSE : bool
+            if True, update the estimated transition probabilities of each vertex that was observed
+        """
         updated_microstates = set()
         for dtraj in dtrajs:
             updated_microstates.update(dtraj)
@@ -125,12 +194,18 @@ class HierarchicalMarkovTree:
                 self.vertices[parent_id].update_T()
 
     def _dirichlet_MMSE(self, vertex_id):
+        """
+        Get the equivalent of external_T, but for a microstate.
+        """
         MMSE_ids = np.array(list(self._microstate_counts[vertex_id].keys()))
         MMSE_counts = np.array(list(self._microstate_counts[vertex_id].values())) + self.alpha
         MMSE_counts = MMSE_counts/np.sum(MMSE_counts)
         return np.array([MMSE_ids, MMSE_counts]).T
 
     def _get_new_microstate_parent(self, vertex_id):
+        """
+        Set the most likely parent of a newly discovered microstate.
+        """
         if self.height == 1:
             self._microstate_parents[vertex_id] = self.root.id
         if self._microstate_MMSE.get(vertex_id) is None:
@@ -157,11 +232,29 @@ class HierarchicalMarkovTree:
 
 
     def add_vertex(self, vertex):
+        """
+        Add a vertex to the tree
+        
+        Parameters
+        ----------
+        vertex : HierarchicalMSMVertex
+            the new vertex
+        """
         assert vertex.tree is self
-        assert isinstance(vertex, HierarchicalMSM)
+        assert isinstance(vertex, HierarchicalMSMVertex)
         self.vertices[vertex.id] = vertex
 
     def add_children(self, parent_id, child_ids):
+        """
+        Add a set of children to a parent
+
+        Parameters
+        ----------
+        parent_id : int
+            id of the new parent
+        child_ids : iterable of int
+            ids of the children to move
+        """
         if not self._assert_valid_vertex(parent_id):
             raise ValueError("Got parent_id for non-existing id")
         for child_id in child_ids:
@@ -170,6 +263,15 @@ class HierarchicalMarkovTree:
             self.vertices[parent_id].add_child(child_id)
 
     def remove_vertex(self, vertex_id):
+        """
+        Remove a vertex from the graph.
+        If the vertex is the root, it will stay the root and go up a level.
+
+        Parameters
+        ----------
+        vertex_id : int
+            the id of the vertex to remove
+        """
         assert not self._is_microstate(vertex_id)
         #TODO maybe add assertion that there are no orphans leftover
 
@@ -187,21 +289,53 @@ class HierarchicalMarkovTree:
             self.update_vertex(parent_id)
 
     def update_vertex(self, vertex_id):
+        """
+        Trigger a vertex to update its state (transition matrix, timescale, etc).
+
+        Parameters
+        ----------
+        vertex_id : int
+            id of the vertex to update
+        """
         assert not self._is_microstate(vertex_id)
         vertex = self.vertices[vertex_id]
         vertex.update()
 
-    def sample_random_walk(self, length, start=None):
-        sample = np.ndarray(length)
+    def sample_random_walk(self, sample_length, start=None):
+        """
+        Sample a discrete trajectory of microstates.
+
+        Parameters
+        ----------
+        sample_length : int
+            length of the random walk
+        start : ind
+            the id of the microstate to start from. If None (default), chooses one uniformly.
+
+        Returns
+        -------
+        sample : np.ndarray
+            an array of size sample_length of microstate ids
+
+        """
+        sample = np.ndarray(sample_length)
         if start is None:
             start = np.random.choice(list(self._microstate_MMSE.keys()))
         current = start
-        for i in range(length):
+        for i in range(sample_length):
             current = self._random_step(current)
             sample[i] = current
         return sample
 
     def _random_step(self, microstate_id):
+        """_random_step.
+        A single step in a random walk
+
+        Parameters
+        ----------
+        microstate_id :
+            microstate_id
+        """
         next_states, transition_probabilities = self._microstate_MMSE[microstate_id]
         return np.random.choice(next_states, p=transition_probabilities)
 
@@ -215,9 +349,44 @@ class HierarchicalMarkovTree:
             vertex_id = self.root.id
         return self.vertices[vertex_id].sample_vertex()
 
-class HierarchicalMSM:
+class HierarchicalMSMVertex:
+    """HierarchicalMSMVertex.
+    This class represents a single vertex in an HMSM tree. 
+    A vertex has the ids of its children and its parent, as well as having a transition matrix
+    describing transition probabilities between its children. This transition matrix is updated
+    when changes to the tree structure affecting the vertex are made, or when the transition
+    probabilities change due to new data.
+    """
+
 
     def __init__(self, tree, children, parent, tau, height, config):
+        """__init__.
+
+        Parameters
+        ----------
+        tree : HierarchicalMSMTree
+            The tree this vertex is part of
+        children : set
+            A set of indices of this vertices children
+        parent : int
+            the id of the parent vertex to this vertex. 
+            Note that the root of an HierarchicalMSMTree, is its own parent
+        tau : int
+            the timestep resolution of this MSM, in multiples of the timestep resolution of 
+            discrete trajectories given as input to the HierarchicalMSMTree in 
+            update_transition_counts. 
+
+            For example, if a Molecular Dynamics simulation is sampled in timesteps of 2e-15 seconds,
+            resulting in (x_0, x_1, ..., x_n), and then one every tenth sample is taken (x_0, x_10,...)
+            and discretized into microstates, resulting in (microstate_0, microstate_10, ...) and 
+            this trajectory is used as input to HierarchicalMSMTree, the timestep resolution of this
+            discrete trajectory is 10*2e-15=2e-14 seconds. Now if this MSM has tau=5, then the 
+            timestep resolution of this MSM is 5*2e-14=1e-13 seconds.
+        height : int
+            the height of this vertex in the tree, where microstates have height 0.
+        config : dict
+            a dictionary of model parameters.
+        """
         self.tree = tree
         self._children = children # should be a set
         self.parent = parent
@@ -410,7 +579,7 @@ class HierarchicalMSM:
         return self.config["split_method"](self)
 
     def _get_new_vertex_with(self, children_ids, tau):
-        vertex = HierarchicalMSM(self.tree, children_ids, self.parent, \
+        vertex = HierarchicalMSMVertex(self.tree, children_ids, self.parent, \
                                  tau, self.height, self.config)
         self.tree.add_vertex(vertex)
         self.tree.vertices[self.parent].add_child(vertex.id)
