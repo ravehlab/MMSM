@@ -154,9 +154,13 @@ def gibbs_metastable_clustering(T, tau, max_k, init='spectral', manual_init=None
     gibbs_clusters = _rw_gibbs(T, max_k, tau, n_iter, initial_clustering, maximum_likelihood)
     if maximum_likelihood:
         # the last iteration _is_ the MLE, so we only need one sample
-        return  _get_MLE_clusters(gibbs_clusters, n_samples=1) 
+        clustering = _get_MLE_clusters(gibbs_clusters, n_samples=1) 
     else:
-        return  _get_MLE_clusters(gibbs_clusters, mle_fraction)
+        clustering = _get_MLE_clusters(gibbs_clusters, mle_fraction)
+
+    clustering_as_partition_of_indices = [np.where(clustering==cluster_index)[0]\
+                                            for cluster_index in np.unique(clustering)]
+    return clustering_as_partition_of_indices
 
 def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True):
     n = p.shape[0]
@@ -186,7 +190,8 @@ def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True):
             return clusters[:it+2]
 
     if maximum_likelihood:
-        raise UserWarning("gibbs_metastable_clustering didn't converge, try increasing max_iter")
+        raise UserWarning("gibbs_metastable_clustering didn't converge, try increasing max_iter\
+                            or changing split criteria")
     return clusters
 
 

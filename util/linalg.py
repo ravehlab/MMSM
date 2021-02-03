@@ -11,6 +11,8 @@ def _assert_2d(array):
     if array.ndim != 2:
         raise LinAlgError('%d-dimensional array given. Array must be '
                           'two-dimensional' % array.ndim) 
+    elif array.size == 0:
+        raise LinAlgError('Input array has size 0')
 
 def _assert_finite(array):
     if not np.isfinite(array).all():
@@ -127,6 +129,7 @@ def get_longest_timescale(P, tau):
     """Get the implied timescale of the second largest eigenvector of a transition matrix P with 
     time resolution tau
     """
+    _assert_valid_transition_matrix(P)
     w,v = np.linalg.eig(P)
     two_largest = np.argpartition(-w, 2)[:2]
     lambda_2 = w[two_largest][1]
