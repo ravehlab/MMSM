@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
@@ -46,7 +47,7 @@ class HierarchicalMSMTree:
         Parameters
         ----------
         config : dict
-            A dictionary of model parameters. 
+            A dictionary of model parameters.
         """
         self._microstate_parents = dict()
         self._microstate_counts = util.count_dict(depth=2)
@@ -58,7 +59,7 @@ class HierarchicalMSMTree:
         self.vertices = dict()
 
         #TODO move to config
-        self.alpha = 1 # parameter of the dirichlet prior 
+        self.alpha = 1 # parameter of the dirichlet prior
 
 
         self._init_unseen_vertex()
@@ -98,28 +99,6 @@ class HierarchicalMSMTree:
     def height(self):
         return self.vertices[self.root].height
 
-    def set_parent(self, child_id, parent_id):
-        """
-        Sets the parent of a vertex to a new vertex.
-        Parameters
-        ----------
-        child_id : int
-            the id of the child
-        parent_id : int
-            the id of the new parent
-        """
-        if not self._assert_valid_vertex(parent_id):
-            raise ValueError("Got parent_id for non-existing id")
-
-        # TODO: either change criterion for _is_microstate, or remove this part
-        #if not self._assert_valid_vertex(child_id):
-        #    raise ValueError("Got child_id for non-existing id")
-
-        if self._is_microstate(child_id):
-            self._microstate_parents[child_id] = parent_id
-        else:
-            self.vertices[child_id].parent = parent_id
-
     def get_parent(self, child_id):
         """
         Get the id of a vertex's parent vertex
@@ -139,7 +118,7 @@ class HierarchicalMSMTree:
         if self._is_microstate(child_id):
             return self._microstate_parents[child_id]
         else:
-            return self.vertices[child_id].parent.id
+            return self.vertices[child_id].parent
 
 
     def get_external_T(self, vertex_id, tau=1):
@@ -194,10 +173,13 @@ class HierarchicalMSMTree:
                 self._microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
 
         # add any newly discovered microstates
+        new_microstates_2_parents = []
         for vertex_id in updated_microstates:
-            if not self._is_microstate(vertex_id):
-                self._get_new_microstate_parent(vertex_id)
-
+            if self._microstate_parents.get(vertex_id) is None:
+                orphans, parent = self._get_new_microstate_parent(vertex_id)
+                new_microstates_2_parents.append((orphans, parent))
+        for children, parent in new_microstates_2_parents:
+            self.set_parent(parent, children)
         # update from the leaves upwards
         for vertex_id in updated_microstates:
             if self._check_parent_update_condition(vertex_id):
@@ -234,7 +216,7 @@ class HierarchicalMSMTree:
 
         for orphan in orphans:
             self._microstate_parents[orphan] = parent
-        self.add_children(parent, orphans)
+        return orphans, parent
 
     def _check_parent_update_condition(self, microstate):
         if self._last_update_sent.get(microstate) is None:
@@ -244,38 +226,43 @@ class HierarchicalMSMTree:
                                                           self._microstate_MMSE[microstate])
             return max_change_factor >= self.config["parent_update_threshold"]
 
+    def _disconnect_from_parents(self, children_ids, parent_id):
+        """This function should ONLY be called by set_parent
+        """
+        parent_2_children = dict()
+        for child_id in children_ids:
+            prev_parent_id = self.get_parent(child_id)
+            if prev_parent_id == parent_id:
+                # this is already the parent no changes need to be made
+                continue
+            if parent_2_children.get(prev_parent_id) is None:
+                parent_2_children[prev_parent_id] = [child_id]
+            else:
+                parent_2_children[prev_parent_id].append(child_id)
+        for prev_parent, children in parent_2_children.items():
+            self.vertices[prev_parent]._remove_children(children)
 
-    def add_vertex(self, vertex):
+    def _connect_to_new_parent(self, children_ids, parent_id):
+        """This function should ONLY be called by set_parent
         """
-        Add a vertex to the tree
-        
-        Parameters
-        ----------
-        vertex : HierarchicalMSMVertex
-            the new vertex
-        """
-        assert vertex.tree is self
-        assert isinstance(vertex, HierarchicalMSMVertex)
-        self.vertices[vertex.id] = vertex
+        for child_id in children_ids:
+            vertex = self.vertices.get(child_id)
+            if vertex is None: # this means the child is a microstate
+                self._microstate_parents[child_id] = parent_id
+            else:
+                vertex._set_parent(parent_id)
+        self.vertices[parent_id]._add_children(children_ids)
 
-    def add_children(self, parent_id, child_ids):
-        """
-        Add a set of children to a parent
-
-        Parameters
-        ----------
-        parent_id : int
-            id of the new parent
-        child_ids : iterable of int
-            ids of the children to move
-        """
+    def set_parent(self, parent_id, children_ids):
         if not self._assert_valid_vertex(parent_id):
             raise ValueError("Got parent_id for non-existing id")
-        for child_id in child_ids:
-            # TODO: either change criterion for _is_microstate, or remove this part
-            #if not self._assert_valid_vertex(child_id):
-            #    raise ValueError("Got child_id for non-existing id")
-            self.vertices[parent_id].add_child(child_id)
+
+        if not isinstance(children_ids, Iterable):
+            children_ids = [children_ids]
+
+        self._disconnect_from_parents(children_ids, parent_id)
+        self._connect_to_new_parent(children_ids, parent_id)
+        self.vertices[parent_id].update(update_children=True)
 
     def remove_vertex(self, vertex_id):
         """
@@ -291,15 +278,15 @@ class HierarchicalMSMTree:
         #TODO maybe add assertion that there are no orphans leftover
 
         if self._is_root(vertex_id):
-            for child_id in self.vertices[root].children:
+            for child_id in self.vertices[self.root].children:
                 self.update_vertex(child_id)
-            self.vertices[root].update()
+            self.vertices[self.root].update()
             self.height += 1
-            self.vertices[root].height = self.height
+            self.vertices[self.root].height = self.height
         else:
             parent_id = self.vertices[vertex_id].parent
             parent = self.vertices[parent_id]
-            parent.remove_child(vertex_id)
+            parent._remove_children([vertex_id])
             del self.vertices[vertex_id]
             self.update_vertex(parent_id)
 
@@ -312,9 +299,23 @@ class HierarchicalMSMTree:
         vertex_id : int
             id of the vertex to update
         """
-        assert not self._is_microstate(vertex_id)
+        if self._is_microstate(vertex_id):
+            return
         vertex = self.vertices[vertex_id]
         vertex.update()
+
+    def add_vertex(self, vertex):
+        """
+        Add a vertex to the tree
+
+        Parameters
+        ----------
+        vertex : HierarchicalMSMVertex
+            the new vertex
+        """
+        assert isinstance(vertex, HierarchicalMSMVertex)
+        assert vertex.tree is self
+        self.vertices[vertex.id] = vertex
 
     def sample_random_walk(self, sample_length, start=None):
         """
@@ -366,7 +367,7 @@ class HierarchicalMSMTree:
 
 class HierarchicalMSMVertex:
     """HierarchicalMSMVertex.
-    This class represents a single vertex in an HMSM tree. 
+    This class represents a single vertex in an HMSM tree.
     A vertex has the ids of its children and its parent, as well as having a transition matrix
     describing transition probabilities between its children. This transition matrix is updated
     when changes to the tree structure affecting the vertex are made, or when the transition
@@ -384,18 +385,18 @@ class HierarchicalMSMVertex:
         children : set
             A set of indices of this vertices children
         parent : int
-            the id of the parent vertex to this vertex. 
+            the id of the parent vertex to this vertex.
             Note that the root of an HierarchicalMSMTree, is its own parent
         tau : int
-            the timestep resolution of this MSM, in multiples of the timestep resolution of 
-            discrete trajectories given as input to the HierarchicalMSMTree in 
-            update_transition_counts. 
+            the timestep resolution of this MSM, in multiples of the timestep resolution of
+            discrete trajectories given as input to the HierarchicalMSMTree in
+            update_transition_counts.
 
             For example, if a Molecular Dynamics simulation is sampled in timesteps of 2e-15 seconds,
             resulting in (x_0, x_1, ..., x_n), and then one every tenth sample is taken (x_0, x_10,...)
-            and discretized into microstates, resulting in (microstate_0, microstate_10, ...) and 
+            and discretized into microstates, resulting in (microstate_0, microstate_10, ...) and
             this trajectory is used as input to HierarchicalMSMTree, the timestep resolution of this
-            discrete trajectory is 10*2e-15=2e-14 seconds. Now if this MSM has tau=5, then the 
+            discrete trajectory is 10*2e-15=2e-14 seconds. Now if this MSM has tau=5, then the
             timestep resolution of this MSM is 5*2e-14=1e-13 seconds.
         height : int
             the height of this vertex in the tree, where microstates have height 0.
@@ -404,7 +405,7 @@ class HierarchicalMSMVertex:
         """
         self.__id = util.get_unique_id()
         self.tree = tree
-        self._children = children # should be a set
+        self._children = set(children)
         if parent is None:
             self.parent = self.__id
         else:
@@ -456,18 +457,38 @@ class HierarchicalMSMVertex:
     def parent_update_threshold(self):
         return self.config["parent_update_threshold"]
 
-    def add_child(self, child_id):
-        self._children.add(child_id)
-        self.tree.set_parent(child_id, self.id)
+    def _set_parent(self, parent):
+        self.parent = parent
+
+    def _add_children(self, children_ids):
+        """
+        Add children to this tree.
+        NOTE: this should *only* be called by HierarchicalMSMTree as this does NOT do anything to
+        maintain a valid tree structure - only changes local variables of this vertex
+        """
+        self._children.update(children_ids)
         self._T_is_updated = False
 
-    def remove_child(self, child_id):
-        self._children.discard(child_id)
-        for child in self._children:
-            self.tree.update_vertex(child)
+    def _add_child(self, child_id):
+        """
+        NOTE: this should *only* be called by HierarchicalMSMTree as this does NOT do anything to
+        maintain a valid tree structure - only changes local variables of this vertex
+        """
+        self._children.add(child_id)
+        self._T_is_updated = False
+
+    def _remove_children(self, children_ids):
+        """
+        NOTE: this should *only* be called by HierarchicalMSMTree as this does NOT do anything to
+        maintain a valid tree structure - only changes local variables of this vertex
+        """
+        self._children.difference_update(children_ids)
         self.update()
 
-    def update(self):
+    def update(self, update_children=False):
+        if update_children:
+            for child in self._children:
+                self.tree.update_vertex(child)
         self._update_T()
         if self._check_parent_update_condition():
             self.tree.update_vertex(self.parent)
@@ -486,15 +507,18 @@ class HierarchicalMSMVertex:
     def _update_T(self):
         T_rows = []
         T_ids = []
+        if len(self._children) == 0:
+            self._T = self._T_tau = self._timescale = None
+            self._T_is_updated = True
+            return
         column_ids = set(self.children)
-
+        
         # Get the rows of T corresponding to each child
         for child in self._children:
             ids, row = self.tree.get_external_T(child).T
             T_rows.append(row)
             T_ids.append(ids)
             column_ids = column_ids.union(ids)
-
         id_2_index, full_n = self._get_id_2_index_map(column_ids)
         self._T = np.zeros((full_n, full_n))
 
@@ -574,8 +598,8 @@ class HierarchicalMSMVertex:
         local_stationary.resize(T.shape[0]) # pad with 0's.
 
         full_transition_probabilities = local_stationary.dot(T)
-        external_T = np.ndarray(T.shape[0]-self.n + 1)
-        ids = np.ndarray(T.shape[0]-self.n + 1)
+        external_T = np.ndarray(T.shape[0] - self.n + 1)
+        ids = np.ndarray(T.shape[0] - self.n + 1)
 
         # the probability of staying in this vertex in external_tau steps:
         external_T[0] = np.sum(full_transition_probabilities[:n])
@@ -584,7 +608,7 @@ class HierarchicalMSMVertex:
 
         ids[0] = self.id
         for j in range(n, T.shape[0]):
-            ids[j] = self.index_2_id[j]
+            ids[j-n] = self.index_2_id[j]
 
         self._external_T = np.stack([ids, external_T]).T
 
@@ -605,29 +629,32 @@ class HierarchicalMSMVertex:
         vertex = HierarchicalMSMVertex(self.tree, children_ids, self.parent, \
                                  tau, self.height, self.config)
         self.tree.add_vertex(vertex)
-        self.tree.vertices[self.parent].add_child(vertex.id)
-        for child_id in children_ids:
-            self.tree.set_parent(child_id, vertex.id)
+        self.tree.set_parent(vertex.id, children_ids)
         return vertex.id
 
     def split(self):
         # 1. get partition compatible with max_timescale
         # 2. create new vertices according to this partition
         # 3. update tree structure
-        partition, taus = self._get_partition()
-
-        if len(partition)==1:
-            warnings.warn(f"split was called, but {self.config.split_method} was unable to \
+        index_partition, taus = self._get_partition()
+        if len(index_partition)==1:
+            warnings.warn(f"split was called, but {self.config['split_method']} was unable to \
                             find a partition", RuntimeWarning)
             return
+        id_partition = [ [self.index_2_id[index] for index in subset] \
+                            for subset in index_partition]
+
 
         new_vertices = []
-        if self.is_root():
+        if self.is_root:
             self._children = set()
-        for i, children_ids in enumerate(partition):
+        for i, children_ids in enumerate(id_partition):
             new_vertex = self._get_new_vertex_with(children_ids, taus[i])
             new_vertices.append(new_vertex)
-        self.tree.add_children(self.parent, new_vertices)
+        print(new_vertices)
+        self.tree.set_parent(self.parent, new_vertices)
+        print(self.children)
+        
         # this will trigger all the vertices on this level (the newly created ones, and the already
         # existing siblings) and the parent to update.
         self.tree.remove_vertex(self.id)
