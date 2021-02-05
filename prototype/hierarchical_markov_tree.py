@@ -1,5 +1,5 @@
-import pdb
 from collections.abc import Iterable
+from collections import defaultdict
 import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
@@ -172,14 +172,13 @@ class HierarchicalMSMTree:
                 self._microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
 
         # add any newly discovered microstates
-        new_microstates_2_parents = []
+        parents_2_new_microstates = defaultdict(set)
         for vertex_id in updated_microstates:
             if self._microstate_parents.get(vertex_id) is None:
                 orphans, parent = self._get_new_microstate_parent(vertex_id)
-                new_microstates_2_parents.append((orphans, parent))
+                parents_2_new_microstates[parent] |= orphans
+        self._assign_children_to_parents(parents_2_new_microstates)
 
-
-        self._assign_children_to_parents(new_microstates_2_parents)
         # update from the leaves upwards
         for vertex_id in updated_microstates:
             if self._check_parent_update_condition(vertex_id):
@@ -275,14 +274,14 @@ class HierarchicalMSMTree:
         self.vertices[parent]._add_children(new_vertices)
         self.update_vertex(parent, update_children=True)
 
-    def _assign_children_to_parents(self, new_microstates_2_parents):
-        for children, new_parent in new_microstates_2_parents:
+    def _assign_children_to_parents(self, parents_2_new_microstates):
+        for new_parent, children in parents_2_new_microstates.items():
             for child in children:
                 self._microstate_parents[child] = new_parent
             self.vertices[new_parent]._add_children(children)
 
         # we want to update (transition probabilities) only after all microstates are assigned
-        for _, new_parent in new_microstates_2_parents:
+        for new_parent in parents_2_new_microstates.keys():
             self.update_vertex(new_parent)
 
 
