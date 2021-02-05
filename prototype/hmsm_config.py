@@ -15,7 +15,8 @@ def two_fold_gibbs_split(hmsm):
     """Get a partition of a vertex, assuming the parent's time resolution tau is twice that of
     this vertex.
     """
-    T = hmsm.T
+    n = hmsm.n
+    T = hmsm.T[:n, :n]
     tau = hmsm.tau
     max_k = int(np.sqrt(hmsm.n))
     partition = clustering.gibbs_metastable_clustering(T, 2*tau, max_k)

@@ -1,3 +1,4 @@
+import pdb
 from collections.abc import Iterable
 import warnings
 import numpy as np
@@ -14,15 +15,16 @@ def _assert_valid_config(config):
 
 def max_fractional_difference(ext_T1, ext_T2):
     #TODO put this somewhere better
-    assert ext_T1.shape == ext_T2.shape, "external_T has changed shape since last update"
-    assert ext_T1.shape[1] == 2
-    sort1 = np.argsort(ext_T1[:,0]) # sort by ids
-    sort2 = np.argsort(ext_T2[:,0]) # sort by ids
+    ids1, T1 = ext_T1
+    ids2, T2 = ext_T2
+    assert T1.shape == T2.shape, "external_T has changed shape since last update"
+    sort1 = np.argsort(ids1) # sort by ids
+    sort2 = np.argsort(ids2) # sort by ids
     max_diff = 0
 
     for i in range(len(sort1)):
-        p1 = ext_T1[sort1[i], 1]
-        p2 = ext_T2[sort2[i], 1]
+        p1 = T1[sort1[i]]
+        p2 = T2[sort2[i]]
         diff = np.abs(1-(p1/p2))
         max_diff = max(max_diff, diff)
 
@@ -62,7 +64,7 @@ class HierarchicalMSMTree:
         self.alpha = 1 # parameter of the dirichlet prior
 
 
-        self._init_unseen_vertex()
+        #self._init_unseen_vertex()
         self._init_root()
 
     def _assert_valid_vertex(self, vertex_id):
@@ -111,8 +113,8 @@ class HierarchicalMSMTree:
         parent_id : int
             the id of the vertex's parent
         """
-        if not self._assert_valid_vertex(child_id):
-            raise ValueError("Got child_id for non-existing id")
+        #if not self._assert_valid_vertex(child_id):
+        #    raise ValueError("Got child_id for non-existing id (%d)"%child_id)
 
         if self._is_microstate(child_id):
             return self._microstate_parents[child_id]
@@ -138,9 +140,9 @@ class HierarchicalMSMTree:
         """
         if self._is_microstate(vertex_id):
             assert tau==1
-            ext_T = self._microstate_MMSE[vertex_id]
-            self._last_update_sent[vertex_id] = ext_T
-            return ext_T
+            ids, ext_T = self._microstate_MMSE[vertex_id]
+            self._last_update_sent[vertex_id] = [ids, ext_T]
+            return ids, ext_T
         return self.vertices[vertex_id].get_external_T(tau)
 
     def update_transition_counts(self, dtrajs, update_MMSE=True):
@@ -175,8 +177,9 @@ class HierarchicalMSMTree:
             if self._microstate_parents.get(vertex_id) is None:
                 orphans, parent = self._get_new_microstate_parent(vertex_id)
                 new_microstates_2_parents.append((orphans, parent))
-        for children, parent in new_microstates_2_parents:
-            self.set_parent(parent, children)
+
+
+        self._assign_children_to_parents(new_microstates_2_parents)
         # update from the leaves upwards
         for vertex_id in updated_microstates:
             if self._check_parent_update_condition(vertex_id):
@@ -187,10 +190,10 @@ class HierarchicalMSMTree:
         """
         Get the equivalent of external_T, but for a microstate.
         """
-        MMSE_ids = np.array(list(self._microstate_counts[vertex_id].keys()))
+        MMSE_ids = np.array(list(self._microstate_counts[vertex_id].keys()), dtype=int)
         MMSE_counts = np.array(list(self._microstate_counts[vertex_id].values())) + self.alpha
         MMSE_counts = MMSE_counts/np.sum(MMSE_counts)
-        return np.array([MMSE_ids, MMSE_counts]).T
+        return (MMSE_ids, MMSE_counts)
 
     def _get_new_microstate_parent(self, vertex_id):
         """
@@ -238,6 +241,7 @@ class HierarchicalMSMTree:
                 parent_2_children[prev_parent_id].append(child_id)
         for prev_parent, children in parent_2_children.items():
             self.vertices[prev_parent]._remove_children(children)
+            self.vertices[prev_parent].update()
 
     def _connect_to_new_parent(self, children_ids, parent_id):
         """This function should ONLY be called by set_parent
@@ -271,6 +275,18 @@ class HierarchicalMSMTree:
         self.vertices[parent]._add_children(new_vertices)
         self.update_vertex(parent, update_children=True)
 
+    def _assign_children_to_parents(self, new_microstates_2_parents):
+        for children, new_parent in new_microstates_2_parents:
+            for child in children:
+                self._microstate_parents[child] = new_parent
+            self.vertices[new_parent]._add_children(children)
+
+        # we want to update (transition probabilities) only after all microstates are assigned
+        for _, new_parent in new_microstates_2_parents:
+            self.update_vertex(new_parent)
+
+
+
     def set_parent(self, parent_id, children_ids):
         if not self._assert_valid_vertex(parent_id):
             raise ValueError("Got parent_id for non-existing id")
@@ -282,7 +298,7 @@ class HierarchicalMSMTree:
         self._connect_to_new_parent(children_ids, parent_id)
         self.vertices[parent_id].update(update_children=True)
 
-    def update_vertex(self, vertex_id, update_children=False):
+    def update_vertex(self, vertex_id, update_children=False, update_parent=True):
         """
         Trigger a vertex to update its state (transition matrix, timescale, etc).
 
@@ -294,7 +310,7 @@ class HierarchicalMSMTree:
         if self._is_microstate(vertex_id):
             return
         vertex = self.vertices[vertex_id]
-        vertex.update(update_children)
+        vertex.update(update_children, update_parent)
 
     def add_vertex(self, vertex):
         """
@@ -411,6 +427,8 @@ class HierarchicalMSMVertex:
         self._T_is_updated = False
         self._last_update_sent = None
 
+
+
     @property
     def children(self):
         return list(self._children)
@@ -442,7 +460,9 @@ class HierarchicalMSMVertex:
         return self._timescale
 
     def _update_timescale(self):
-        self._timescale = linalg.get_longest_timescale(self.T, self.tau)
+        n = self.n
+        T_inner = linalg.normalize_rows(self.T[:n, :n], norm=1)
+        self._timescale = linalg.get_longest_timescale(T_inner, self.tau)
 
     @property
     def is_root(self):
@@ -470,14 +490,13 @@ class HierarchicalMSMVertex:
         maintain a valid tree structure - only changes local variables of this vertex
         """
         self._children -= set(children_ids)
-        self.update()
 
-    def update(self, update_children=False):
+    def update(self, update_children=False, update_parent=True):
         if update_children:
             for child in self._children:
-                self.tree.update_vertex(child)
+                self.tree.update_vertex(child, update_parent=False)
         self._update_T()
-        if self._check_parent_update_condition():
+        if self._check_parent_update_condition() and update_parent:
             self.tree.update_vertex(self.parent)
 
 
@@ -501,18 +520,19 @@ class HierarchicalMSMVertex:
 
         # Get the rows of T corresponding to each child
         for child in self._children:
-            ids, row = self.tree.get_external_T(child).T
+            ids, row = self.tree.get_external_T(child)
             T_rows.append(row)
             T_ids.append(ids)
             column_ids = column_ids.union(ids)
-        id_2_index, full_n = self._get_id_2_index_map(column_ids)
+        id_2_index, index_2_id, full_n = self._get_id_2_index_map(column_ids)
+        self.index_2_id = index_2_id
         self._T = np.zeros((full_n, full_n))
 
         # Now fill the matrix self._T
         for i, T_row in enumerate(T_rows):
             for _j, i_2_j_probability in enumerate(T_row):
                 j = id_2_index[ T_ids[i][_j] ]
-                self._T[i,j] = i_2_j_probability
+                self._T[i,j] += i_2_j_probability
         self._T_is_updated = True #Set this to false to always recalculate T
 
         #make the external vertices sinks
@@ -521,14 +541,10 @@ class HierarchicalMSMVertex:
         # get the transition matrix in timestep resolution self.tau
         self._T_tau = np.linalg.matrix_power(self._T, self.tau)
         self._update_timescale()
+        self._update_external_T()
 
         if self._check_split_condition():
             self.split()
-        else:
-            #save the ids of the indices
-            self.index_2_id = util.inverse_dict(id_2_index)
-
-        self._update_external_T()
 
     def _get_id_2_index_map(self, column_ids):
         """Return a dict that maps each id to the index of its row/column in T, and the
@@ -536,21 +552,25 @@ class HierarchicalMSMVertex:
         """
         id_2_parent_id = {}
         id_2_index = {}
+        index_2_id = {}
         not_my_children = set()
+        ids_to_add = set()
         for column_id in column_ids:
             parent = self.tree.get_parent(column_id)
             if parent != self.id:
                 not_my_children.add(column_id)
                 id_2_parent_id[column_id] = parent
                 if parent not in column_ids:
-                    column_ids.add(parent)
+                    ids_to_add.add(parent)
         column_ids -= not_my_children
+        column_ids |= ids_to_add
         for j, id in enumerate(column_ids):
             id_2_index[id] = j
+            index_2_id[j] = id
         for id, parent_id in id_2_parent_id.items():
             id_2_index[id] = id_2_index[parent_id]
         full_n = len(column_ids)
-        return id_2_index, full_n
+        return id_2_index, index_2_id, full_n
 
 
 
@@ -560,32 +580,45 @@ class HierarchicalMSMVertex:
         T = linalg.normalize_rows(T)
         return stationary_distribution(T)
 
-    def get_external_T(self, ext_tau=1):
+    def get_external_T(self, ext_tau=1) -> tuple:
+        """get_external_T.
+
+        Parameters
+        ----------
+        self :
+            self
+        ext_tau :
+            The timestep resolution of the transition probabilities (see return value)
+
+        Returns
+        -------
+        (ids, external_T) ids and external_T are both arrays, such that external_T[i] is the 
+        probability of a transition from this vertex to the vertex with id ids[i] in tau steps.
+        """
         # returns: ext_T: an (m,2) array, such that if ext_T[j] = v,p, then p is the probability
         # of a transition from this vertex to the vertex v.
 
-        external_T = self._external_T.copy()
+        ids, external_T = self._external_T
+        ids = ids.copy()
+        external_T = external_T.copy()
         if ext_tau != 1:
-            transitions = external_T[:1].T # just the transition probabilities, as a row vector
-            transitions[0] = np.power(transitions[0], ext_tau) # The probability of no transition
+            external_T[0] = np.power(external_T[0], ext_tau) # The probability of no transition
             # The relative probabilities of the other transitions haven't changed, so normalize:
-            transitions[1:] = transitions[1:]/np.sum(transitions[:,1]) * (1-transitions[0])
-            #put the result back:
-            external_T[:1] = transitions.T
+            external_T[1:] = (external_T[1:]/np.sum(external_T[:,1])) * (1-external_T[0])
 
-        self._last_update_sent = external_T.copy()
-        return external_T
+        self._last_update_sent = [ids, external_T]
+        return ids.copy(), external_T.copy()
 
     def _update_external_T(self):
         assert self._T_is_updated
         T = self._T # this is T(1) as opposed to self.T which is T(tau)
         n = self.n
         local_stationary = self.get_local_stationary_distribution()
-        local_stationary.resize(T.shape[0]) # pad with 0's.
+        local_stationary = np.resize(local_stationary, T.shape[0]) # pad with 0's.
 
         full_transition_probabilities = local_stationary.dot(T)
         external_T = np.ndarray(T.shape[0] - self.n + 1)
-        ids = np.ndarray(T.shape[0] - self.n + 1)
+        ids = np.ndarray(T.shape[0] - self.n + 1, dtype=int)
 
         # the probability of staying in this vertex in external_tau steps:
         external_T[0] = np.sum(full_transition_probabilities[:n])
@@ -593,10 +626,10 @@ class HierarchicalMSMVertex:
         external_T[1:] = full_transition_probabilities[n:]
 
         ids[0] = self.id
-        for j in range(n, T.shape[0]):
-            ids[j-n] = self.index_2_id[j]
+        for j in range(1, ids.shape[0]):
+            ids[j] = self.index_2_id[n+j-1]
 
-        self._external_T = np.stack([ids, external_T]).T
+        self._external_T = ids, external_T
 
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
         # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,

@@ -25,6 +25,7 @@ def _assert_stacked_square(array):
 
 def _assert_stochastic(array, axis=1):
     if not np.all(np.isclose(np.sum(array, axis=1), 1)):
+        print(array)
         raise LinAlgError(f"Array must sum to 1 across axis {axis}")
 
 def _assert_valid_transition_matrix(array):
@@ -131,8 +132,12 @@ def get_longest_timescale(P, tau):
     """
     _assert_valid_transition_matrix(P)
     w,v = np.linalg.eig(P)
-    two_largest = np.argpartition(-w, 2)[:2]
-    lambda_2 = w[two_largest][1]
+    if len(w) == 2:
+        lambda_2 = min(w)
+    else:
+        two_largest = np.argpartition(-w, 2)[:2]
+        lambda_2 = w[two_largest][1]
+
     t_2 = (-tau)/np.log(lambda_2)
     return t_2
 
