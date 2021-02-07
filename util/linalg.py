@@ -24,8 +24,7 @@ def _assert_stacked_square(array):
         raise LinAlgError('Last 2 dimensions of the array must be square')
 
 def _assert_stochastic(array, axis=1):
-    if not np.all(np.isclose(np.sum(array, axis=1), 1)):
-        print(array)
+    if not np.all(np.isclose(np.sum(array, axis=axis), 1)):
         raise LinAlgError(f"Array must sum to 1 across axis {axis}")
 
 def _assert_valid_transition_matrix(array):
