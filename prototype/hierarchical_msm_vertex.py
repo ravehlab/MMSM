@@ -298,14 +298,22 @@ class HierarchicalMSMVertex:
 
         self.tree.update_split(id_partition, taus, self, self.parent)
 
-    def sample_microstate(self):
+    def sample_microstate(self, n_samples):
         """Get a microstate from this MSM, ideally chosen such that sampling a random walk from
         this microstate is expected to increase some objective function.
 
         return: microstate_id, the id of the sampled microstate.
         """
-        sample = self.config["sample_method"](self)
+        # a sample of n_samples vertices from this msm:
+        sample = [self.config["sample_method"](self) for _ in range(n_samples)]
         if self.height == 1:
             return sample
 
-        return self.tree.sample_microstate(sample)
+        # now for each of those samples, get a sample from that vertex, the number of times 
+        # it appeared in sample
+        vertices, counts = np.unique(sample, return_counts=True)
+        n_vertices = len(vertices)
+        recursive_sample = []
+        for i, vertex in enumerate(vertices):
+            recursive_sample += self.tree.sample_microstate(counts[i], vertex) 
+        return recursive_sample

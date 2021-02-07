@@ -9,7 +9,7 @@ class HierarchicalMSMTree:
     This class encapsulates the HMSM data structure, and provides an interface for it.
     The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
     class.
-    Most importantly, the method "update_transition_counts" allows the user to simply input
+    Most importantly, the method "update_model_from_trajectories" allows the user to simply input
     observed discrete trajectories, (in the form of an iterable of state ids), and the estimation
     of a Hierarchical Markov Model is entirely automated - including estimating a hierarchy of
     metastable states and transition rates between them in different timescales.
@@ -118,7 +118,9 @@ class HierarchicalMSMTree:
             return ids, ext_T
         return self.vertices[vertex_id].get_external_T(tau)
 
-    def update_transition_counts(self, dtrajs, update_MMSE=True):
+    def get_longest_timescale(self, dt=1):
+        return self.vertices[self.root].timescale * dt
+    def update_model_from_trajectories(self, dtrajs, update_MMSE=True):
         """
         Update the Hierarchical MSM with data from observed discrete trajectories.
 
@@ -335,7 +337,7 @@ class HierarchicalMSMTree:
         next_states, transition_probabilities = self._microstate_MMSE[microstate_id].T
         return np.random.choice(next_states, p=transition_probabilities)
 
-    def sample_microstate(self, vertex_id=None):
+    def sample_microstate(self, n_samples, vertex_id=None):
         """Get a microstate from this HMSM, ideally chosen such that sampling a random walk from
         this microstate is expected to increase some objective function.
 
@@ -343,5 +345,5 @@ class HierarchicalMSMTree:
         """
         if vertex_id is None:
             vertex_id = self.root
-        return self.vertices[vertex_id].sample_vertex()
+        return self.vertices[vertex_id].sample_vertex(n_samples)
 
