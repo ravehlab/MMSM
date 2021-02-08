@@ -28,7 +28,6 @@ class HierarchicalMSMTree:
         self._microstate_counts = util.count_dict(depth=2)
         self._microstate_MMSE = dict()
         self._last_update_sent = dict()
-        _assert_valid_config(config) #TODO maybe assign default values for missing values instead?
         self.config = config
 
         self.vertices = dict()
@@ -119,7 +118,16 @@ class HierarchicalMSMTree:
         return self.vertices[vertex_id].get_external_T(tau)
 
     def get_longest_timescale(self, dt=1):
-        return self.vertices[self.root].timescale * dt
+        """
+        Get the timescale associated with the slowest process represented by the HMSM
+
+        Parameters
+        ----------
+        dt : float
+            The timestep size of the simulation
+        """
+        return self.vertices[self.root].timescale * dt * self.config["base_tau"]
+
     def update_model_from_trajectories(self, dtrajs, update_MMSE=True):
         """
         Update the Hierarchical MSM with data from observed discrete trajectories.
@@ -345,5 +353,5 @@ class HierarchicalMSMTree:
         """
         if vertex_id is None:
             vertex_id = self.root
-        return self.vertices[vertex_id].sample_vertex(n_samples)
+        return self.vertices[vertex_id].sample_microstate(n_samples)
 

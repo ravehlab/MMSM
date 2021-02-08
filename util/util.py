@@ -39,7 +39,7 @@ def count_dict(depth=1) -> defaultdict:
 
 get_unique_id = lambda : np.random.choice(sys.maxsize)
 
-def max_fractional_difference(ext_T1, ext_T2) -> double:
+def max_fractional_difference(ext_T1, ext_T2):
     """
     Get the maximal change in transition probabilities between ext_T1 and ext_T2, where ext_T1/2
     are tuples of (ids, transition_probabilities), as returned by 

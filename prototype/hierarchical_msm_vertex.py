@@ -2,7 +2,6 @@ import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
-from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
 
 
 class HierarchicalMSMVertex:
@@ -93,6 +92,8 @@ class HierarchicalMSMVertex:
 
     def _update_timescale(self):
         n = self.n
+        if self.n == 1:
+            return 0
         T_inner = linalg.normalize_rows(self.T[:n, :n], norm=1)
         self._timescale = linalg.get_longest_timescale(T_inner, self.tau)
 
