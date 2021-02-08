@@ -15,6 +15,7 @@ def get_default_config(**kwargs):
     config.update(kwargs)
     return config
 
+# TODO: move all methods below somewhere else, probably into a misc.py or util.py file
 def two_fold_gibbs_split(hmsm):
     """Get a partition of a vertex, assuming the parent's time resolution tau is twice that of
     this vertex.
