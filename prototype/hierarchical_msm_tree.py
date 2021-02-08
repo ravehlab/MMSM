@@ -9,10 +9,12 @@ class HierarchicalMSMTree:
     This class encapsulates the HMSM data structure, and provides an interface for it.
     The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
     class.
-    Most importantly, the method "update_model_from_trajectories" allows the user to simply input
+    Most importantly, the method update_model_from_trajectories() allows the user to simply input
     observed discrete trajectories, (in the form of an iterable of state ids), and the estimation
     of a Hierarchical Markov Model is entirely automated - including estimating a hierarchy of
     metastable states and transition rates between them in different timescales.
+    
+    # TODO: add a short usage example
     """
 
 
