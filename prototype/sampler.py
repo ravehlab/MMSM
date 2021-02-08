@@ -13,12 +13,20 @@ class BrownianDynamicsSampler:
         self.coarse_grain = coarse_grain_type(**coarse_grain_args)
         self.noise_magnitude = np.sqrt(2*self.dim * self.kT * self.dt)
 
-    def sample_from_microstate(self, microstate, sample_len, n_samples, tau):
+    def get_initial_sample(self, start_points, sample_len, n_samples, tau):
         trajs = []
-        for _ in range(n_samples):
-            x = self.coarse_grain.sample_from(microstate)
-            traj = self.sample_from_point(x, sample_len, tau)
-            trajs.append(traj)
+        for point in start_points:
+            for i in range(n_samples):
+                trajs.append(self.sample_from_point(point, sample_len, tau))
+        return self._get_dtrajs(trajs)
+
+    def sample_from_microstates(self, microstates, sample_len, n_samples, tau):
+        trajs = []
+        for microstate in microstates:
+            for _ in range(n_samples):
+                x = self.coarse_grain.sample_from(microstate)
+                traj = self.sample_from_point(x, sample_len, tau)
+                trajs.append(traj)
         return self._get_dtrajs(trajs)
 
     def sample_from_point(self, point, sample_len, tau):

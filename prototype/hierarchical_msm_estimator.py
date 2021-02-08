@@ -29,6 +29,8 @@ class HierarchicalMSMEstimator:
     ----------
     sampler: DiscreteSampler
         A wrapper for some process that samples from a discrete Markov chain.
+    start_points: Iterable
+        A set of points from which to take samples to initiate the sampler and HierarchicalMSMTree.
 
     Other Parameters
     ----------------
@@ -41,6 +43,11 @@ class HierarchicalMSMEstimator:
             How many samples to take from each microstate in a single batch of samples
         sample_len: int
             The length of each sample in a single batch of samples
+        base_tau: int
+            The timestep resolution of the discrete trajectories used to estimate the HMSM, as 
+            multiples of the dt of the sampler; i.e. if base_tau==5, and sampler.dt==2e-15, then
+            the trajectories used to estimate the HMSM will be in timesteps of 5*2e-15=10e-15
+            seconds.
         split_condition: function
             A function that takes an HierarchicalMSMVertex and returns True if this vertex should
             split into two or more vertices
@@ -78,12 +85,21 @@ class HierarchicalMSMEstimator:
     """
 
 
-    def __init__(self, sampler, **config_kwargs):
+    def __init__(self, sampler, start_points, **config_kwargs):
         self.sampler = sampler
         self.config = get_default_config()
         self.config.update(config_kwargs)
-
         self.hmsm_tree = HierarchicalMSMTree(self.config)
+        self._init_sample(start_points)
+        
+
+    def _init_sample(self, start_points):
+        dtrajs = self.sampler.get_initial_sample(start_points,\
+                                                 self.config["n_samples"],\
+                                                 self.config["sample_len"],\
+                                                 self.config["base_tau"])
+        self.hmsm_tree.update_model_from_trajectories(dtrajs)
+
 
     @property
     def batch_size(self):
@@ -110,15 +126,18 @@ class HierarchicalMSMEstimator:
 
         stop_condition = _get_stop_condition(max_time, max_samples, max_timescale)
         n_samples = 0
-        timescale = self.hmsm_tree.get_longest_timescale()
+        timescale = np.inf
         batch_size = self.batch_size
 
         while not stop_condition(n_samples, time.time(), timescale):
             microstates = self.hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
-            dtrajs = self.sampler.sample_from_microstates(microstates,\
-                                                          self.config["n_samples"],\
-                                                          self.config["sample_len"],
-                                                          self.config["base_tau"])
-            self.hmsm_tree.update_model_from_trajectories(dtrajs)
+            self._batch_sample_and_estimate(microstates)
             n_samples += batch_size
-            timescale = self.hmsm_tree.get_longest_timescale()
+            timescale = self.hmsm_tree.get_longest_timescale(self.sampler.dt)
+
+    def _batch_sample_and_estimate(self, microstates):
+        dtrajs = self.sampler.sample_from_microstates(microstates,\
+                                                      self.config["n_samples"],\
+                                                      self.config["sample_len"],
+                                                      self.config["base_tau"])
+        self.hmsm_tree.update_model_from_trajectories(dtrajs)
