@@ -5,7 +5,8 @@ from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
 from HMSM.prototype.hmsm_config import get_default_config
 
 def _get_stop_condition(max_time, max_samples, max_timescale):
-
+    # TODO: consider moving somewhere more logical
+    # TODO: Add at least a brief doc
     stop_conditions = []
 
     if max_time is not None:
@@ -20,7 +21,7 @@ def _get_stop_condition(max_time, max_samples, max_timescale):
                                     timescale > max_timescale)
     return lambda *args: np.any([condition(*args) for condition in stop_conditions])
 
-class HierarchicalMSMEstimator:
+class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
     """HierarchicalMSMEstimator.
     This class wraps the HierarchicalMSMTree data structure, its construction and
     estimation from a sampler object.
@@ -65,19 +66,23 @@ class HierarchicalMSMEstimator:
 
     Examples
     --------
+    # TODO: declare (possibly in README) what's the standard default units being used everywhere,
+    #       e.g. length - angstroms, dt - seconds, force-function - kcal_per_mol_per_angstroms
     >>> sampler = BrownianDynamicsSampler(force_function, dim=2, dt=2e-15, kT=1)
-    >>> hmsm_estimator = HierarchicalMSMEstimator(sampler, split_method=two_fold_gibbs_split)
+    >>> hmsm = HierarchicalMSM(sampler, split_method=two_fold_gibbs_split)
 
-    sample and update in batches for 1 minute:
+    sample and update in batches for 1 minute in CPU time:
 
-    >>> tree = hmsm_estimator.estimate(max_time=60)
+    >>> tree = hmsm.expand(max_cputime=60)
 
-    now we can do some analysis, visualizations, etc, on the tree
+    Now we can do some analysis, visualizations, etc, on the tree:
+    
+    TODO: provide example
 
-    continue sampling until the timescale of the longest process described by the HMSM is
+    Continue sampling until the timescale of the longest process described by the HMSM is at least
     1 second (2e15*sampler.dt = 2e15*2e-15 = 1 second):
 
-    >>> hmsm_estimator.estimate(max_timescale=2e15)
+    >>> hmsm.expand(max_timescale=2e15) # TODO: disambiguate the interface - make it crystal clear what the expected result would be
     >>> tree.get_longest_timescale(dt=sampler.dt)
     1.52794
 
@@ -105,18 +110,21 @@ class HierarchicalMSMEstimator:
     def batch_size(self):
         return self.config["n_microstates"] * self.config["n_samples"] * self.config["sample_len"]
 
-    def estimate(self, max_time=None, max_samples=None, max_timescale=None):
+    # TODO: update to expand() everywhere
+    # TODO: (long term, not now) - add expand by confidence interval, maybe there should be an expand vs. exploit mode, or jsut
+    #        according to parametersw
+    def expand(self, max_cputime=None, max_samples=None, max_timescale=None):
         """
         Estimate an HMSM by sampling from the sampler.
 
         Parameters
         ----------
-        max_time :
-            Maximum time to run in seconds.
+        max_cputime : # TODO: update to max_cputime everywhere
+            Maximum cpu time to run in seconds.
         max_samples :
             Maximum number of samples to use.
         max_timescale :
-            Maximum timescale of the full HMSM, after which to stop sampling.
+            Minimum timescale of the full HMSM, after which to stop sampling.
         """
 
         if max_time is max_samples is max_timescale is None:
