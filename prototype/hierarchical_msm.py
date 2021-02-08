@@ -22,16 +22,20 @@ def _get_stop_condition(max_time, max_samples, max_timescale):
     return lambda *args: np.any([condition(*args) for condition in stop_conditions])
 
 class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
-    """HierarchicalMSMEstimator.
-    This class wraps the HierarchicalMSMTree data structure, its construction and
-    estimation from a sampler object.
+    """HierarchicalMSM.
+    This class is used to build and manage a hierarchical MSM over some energy landscape, as will
+    be described in Clein et al. 2021. It relies on the provided sampler to explore microstates, that
+    are stored at the vertices of lowest (highest-resolution) level in the MSM. It then creates
+    a hierarchical (multiscale) map of the states in the configuration space, and stores it in a 
+    HierarchicalMSMTree data structure.
 
     Parameters
     ----------
     sampler: DiscreteSampler
-        A wrapper for some process that samples from a discrete Markov chain.
+        A wrapper for some process that samples a sequences of microstates from a Markov-chain
+        over a discrete set of states and a discrete time step. 
     start_points: Iterable
-        A set of points from which to take samples to initiate the sampler and HierarchicalMSMTree.
+        A set of points from which to initiate the HierarchicalMSM at the highest-resolution level.
 
     Other Parameters
     ----------------
@@ -143,7 +147,7 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
             n_samples += batch_size
             timescale = self.hmsm_tree.get_longest_timescale(self.sampler.dt)
 
-    def _batch_sample_and_estimate(self, microstates):
+    def _batch_sample_and_expand(self, microstates):
         dtrajs = self.sampler.sample_from_microstates(microstates,\
                                                       self.config["n_samples"],\
                                                       self.config["sample_len"],
