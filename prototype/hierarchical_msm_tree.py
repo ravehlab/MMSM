@@ -253,6 +253,7 @@ class HierarchicalMSMTree:
         else:
             # the root is going up a level, so it's children will be the new vertices
             split_vertex._remove_children(split_vertex.children)
+            split_vertex.height += 1
 
         self.vertices[parent]._add_children(new_vertices)
         self.update_vertex(parent, update_children=True)

@@ -66,7 +66,8 @@ class HierarchicalMSMEstimator:
     Examples
     --------
     >>> sampler = BrownianDynamicsSampler(force_function, dim=2, dt=2e-15, kT=1)
-    >>> hmsm_estimator = HierarchicalMSMEstimator(sampler, split_method=two_fold_gibbs_split)
+    >>> start_points = np.random.normal(0,1, size=(5,2))
+    >>> hmsm_estimator = HierarchicalMSMEstimator(sampler, start_points, split_method=two_fold_gibbs_split)
 
     sample and update in batches for 1 minute:
 
@@ -126,7 +127,7 @@ class HierarchicalMSMEstimator:
 
         stop_condition = _get_stop_condition(max_time, max_samples, max_timescale)
         n_samples = 0
-        timescale = np.inf
+        timescale = 0
         batch_size = self.batch_size
 
         while not stop_condition(n_samples, time.time(), timescale):
