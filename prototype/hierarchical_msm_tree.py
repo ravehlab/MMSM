@@ -226,8 +226,6 @@ class HierarchicalMSMTree:
             self.vertices[prev_parent].update()
 
     def _connect_to_new_parent(self, children_ids, parent_id):
-        """This function should ONLY be called by set_parent
-        """
         for child_id in children_ids:
             vertex = self.vertices.get(child_id)
             if vertex is None: # this means the child is a microstate

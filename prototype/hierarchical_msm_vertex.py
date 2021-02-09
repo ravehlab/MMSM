@@ -123,6 +123,7 @@ class HierarchicalMSMVertex:
         maintain a valid tree structure - only changes local variables of this vertex
         """
         self._children -= set(children_ids)
+        self._T_is_updated = False
 
     def update(self, update_children=False, update_parent=True):
         if update_children:
@@ -138,39 +139,60 @@ class HierarchicalMSMVertex:
             return False
         if self._last_update_sent is None:
             return True
-        max_change_factor = max_fractional_difference(self._last_update_sent, \
+        max_change_factor = util.max_fractional_difference(self._last_update_sent, \
                                                       self.get_external_T())
         return max_change_factor >= self.parent_update_threshold
 
     def _update_T(self):
-        T_rows = []
-        T_ids = []
         if len(self._children) == 0:
             self._T = self._T_tau = self._timescale = None
             self._T_is_updated = True
             return
+        T_rows = dict()
         column_ids = set(self.children)
 
         # Get the rows of T corresponding to each child
         for child in self._children:
             ids, row = self.tree.get_external_T(child)
+            T_rows[child] = (ids, row)
             linalg._assert_stochastic(row, axis=0)
-            T_rows.append(row)
-            T_ids.append(ids)
             column_ids = column_ids.union(ids)
+
         id_2_index, index_2_id, full_n = self._get_id_2_index_map(column_ids)
         self.index_2_id = index_2_id
+
         self._T = np.zeros((full_n, full_n))
+        n_external = full_n - self.n # number of external vertices
 
         # Now fill the matrix self._T
-        for i, T_row in enumerate(T_rows):
-            for _j, i_2_j_probability in enumerate(T_row):
-                j = id_2_index[ T_ids[i][_j] ]
-                self._T[i,j] += i_2_j_probability
+        vertices_to_disown = dict()
+        for child, (ids, row) in T_rows.items():
+            row = id_2_index[child]
+            for id, transition_probability in zip(ids, row):
+                column = id_2_index[id]
+                self._T[row, column] += transition_probability
+
+            # check if this vertex should be in one of my neighbors instead:
+            most_likely_parent = self._get_most_likely_parent(self._T[row], n_external)
+            if most_likely_parent != self.id:
+                if vertices_to_disown.get(new_parent) is None:
+                    vertices_to_disown[new_parent] = [child]
+                else:
+                    vertices_to_disown[new_parent].append(child)
+
+
+        if len(vertices_to_disown) > 0:
+            for new_parent, children in vertices_to_disown.items():
+                self._remove_children(children)
+                self.tree._connect_to_new_parent(children, new_parent)
+            for new_parent in vertices_to_disown.keys(): #only after everyone was reassigned update
+                self.tree.update_vertex(new_parent)
+            return self._update_T() # now recalculate without disowned children
+
+
         self._T_is_updated = True #Set this to false to always recalculate T
 
         #make the external vertices sinks
-        n_external = full_n - self.n
         self._T[self.n:, self.n:] = np.eye(n_external)
         linalg._assert_stochastic(self._T)
         # get the transition matrix in timestep resolution self.tau
@@ -212,6 +234,15 @@ class HierarchicalMSMVertex:
         full_n = len(index_2_id)
         return id_2_index, index_2_id, full_n
 
+    def _get_most_likely_parent(self, row, n_external):
+        temp_row = np.ndarray(1+n_external)
+        temp_row[0] = np.sum(row[:self.n])
+        temp_row[1:] = row[self.n:]
+        maximum = np.argmax(temp_row)
+        if maximum > 0:
+            new_parent = self.index_2_id[self.n + maximum - 1]
+            return new_parent
+        return self.id
 
 
     def get_local_stationary_distribution(self):
@@ -232,7 +263,7 @@ class HierarchicalMSMVertex:
 
         Returns
         -------
-        (ids, external_T) ids and external_T are both arrays, such that external_T[i] is the 
+        (ids, external_T) ids and external_T are both arrays, such that external_T[i] is the
         probability of a transition from this vertex to the vertex with id ids[i] in tau steps.
         """
         # returns: ext_T: an (m,2) array, such that if ext_T[j] = v,p, then p is the probability
@@ -310,11 +341,10 @@ class HierarchicalMSMVertex:
         if self.height == 1:
             return sample
 
-        # now for each of those samples, get a sample from that vertex, the number of times 
+        # now for each of those samples, get a sample from that vertex, the number of times
         # it appeared in sample
         vertices, counts = np.unique(sample, return_counts=True)
-        n_vertices = len(vertices)
         recursive_sample = []
         for i, vertex in enumerate(vertices):
-            recursive_sample += self.tree.sample_microstate(counts[i], vertex) 
+            recursive_sample += self.tree.sample_microstate(counts[i], vertex)
         return recursive_sample
