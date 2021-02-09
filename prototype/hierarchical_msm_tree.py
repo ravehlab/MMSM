@@ -167,7 +167,7 @@ class HierarchicalMSMTree:
             if self._check_parent_update_condition(vertex_id):
                 parent_id = self._microstate_parents[vertex_id]
                 self.vertices[parent_id].update()
-
+    
     def _dirichlet_MMSE(self, vertex_id):
         """
         Get the equivalent of external_T, but for a microstate.
@@ -252,6 +252,7 @@ class HierarchicalMSMTree:
             # the root is going up a level, so it's children will be the new vertices
             split_vertex._remove_children(split_vertex.children)
             split_vertex.height += 1
+            split_vertex.tau *= 2 #TODO: this should be dependend on the partition
 
         self.vertices[parent]._add_children(new_vertices)
         self.update_vertex(parent, update_children=True)
@@ -341,7 +342,7 @@ class HierarchicalMSMTree:
         microstate_id :
             microstate_id
         """
-        next_states, transition_probabilities = self._microstate_MMSE[microstate_id].T
+        next_states, transition_probabilities = self._microstate_MMSE[microstate_id]
         return np.random.choice(next_states, p=transition_probabilities)
 
     def sample_microstate(self, n_samples, vertex_id=None):

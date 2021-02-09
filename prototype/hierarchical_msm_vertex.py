@@ -93,9 +93,10 @@ class HierarchicalMSMVertex:
     def _update_timescale(self):
         n = self.n
         if self.n == 1:
-            return 0
-        T_inner = linalg.normalize_rows(self.T[:n, :n], norm=1)
-        self._timescale = linalg.get_longest_timescale(T_inner, self.tau)
+            self._timescale = 0
+        else:
+            T_inner = linalg.normalize_rows(self.T[:n, :n], norm=1)
+            self._timescale = linalg.get_longest_timescale(T_inner, self.tau)
 
     @property
     def is_root(self):
@@ -166,28 +167,30 @@ class HierarchicalMSMVertex:
 
         # Now fill the matrix self._T
         vertices_to_disown = dict()
-        for child, (ids, row) in T_rows.items():
+        for child, (ids, T_row) in T_rows.items():
             row = id_2_index[child]
-            for id, transition_probability in zip(ids, row):
+            for id, transition_probability in zip(ids, T_row):
                 column = id_2_index[id]
                 self._T[row, column] += transition_probability
 
             # check if this vertex should be in one of my neighbors instead:
             most_likely_parent = self._get_most_likely_parent(self._T[row], n_external)
             if most_likely_parent != self.id:
-                if vertices_to_disown.get(new_parent) is None:
-                    vertices_to_disown[new_parent] = [child]
+                if vertices_to_disown.get(most_likely_parent) is None:
+                    vertices_to_disown[most_likely_parent] = [child]
                 else:
-                    vertices_to_disown[new_parent].append(child)
+                    vertices_to_disown[most_likely_parent].append(child)
 
 
         if len(vertices_to_disown) > 0:
+            assert not self.is_root
             for new_parent, children in vertices_to_disown.items():
                 self._remove_children(children)
                 self.tree._connect_to_new_parent(children, new_parent)
+            self._update_T() # now recalculate without disowned children
             for new_parent in vertices_to_disown.keys(): #only after everyone was reassigned update
-                self.tree.update_vertex(new_parent)
-            return self._update_T() # now recalculate without disowned children
+                self.tree.update_vertex(new_parent, update_parent=False)
+            return
 
 
         self._T_is_updated = True #Set this to false to always recalculate T
@@ -199,6 +202,7 @@ class HierarchicalMSMVertex:
         self._T_tau = np.linalg.matrix_power(self._T, self.tau)
         self._update_timescale()
         self._update_external_T()
+
 
         if self._check_split_condition():
             self.split()
