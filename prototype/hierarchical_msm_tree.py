@@ -4,6 +4,11 @@ import numpy as np
 from HMSM.util import util
 from HMSM.prototype.hierarchical_msm_vertex import HierarchicalMSMVertex
 
+SPLIT = "SPLIT"
+DISOWN_CHILDREN = "DISOWN_CHILDREN"
+UPDATE_PARENT = "UPDATE_PARENT"
+SUCCESS = "SUCCESS"
+
 class HierarchicalMSMTree:
     """HierarchicalMSMTree.
     This class encapsulates the HMSM data structure, and provides an interface for it.
@@ -210,22 +215,6 @@ class HierarchicalMSMTree:
                                                       self._microstate_MMSE[microstate])
         return max_change_factor >= self.config["parent_update_threshold"]
 
-    def _disconnect_from_parents(self, children_ids, parent_id):
-        """This function should ONLY be called by set_parent
-        """
-        parent_2_children = dict()
-        for child_id in children_ids:
-            prev_parent_id = self.get_parent(child_id)
-            if prev_parent_id == parent_id:
-                # this is already the parent no changes need to be made
-                continue
-            if parent_2_children.get(prev_parent_id) is None:
-                parent_2_children[prev_parent_id] = [child_id]
-            else:
-                parent_2_children[prev_parent_id].append(child_id)
-        for prev_parent, children in parent_2_children.items():
-            self.vertices[prev_parent]._remove_children(children)
-            self.vertices[prev_parent].update()
 
     def _connect_to_new_parent(self, children_ids, parent_id):
         for child_id in children_ids:
@@ -236,7 +225,7 @@ class HierarchicalMSMTree:
                 vertex._set_parent(parent_id)
         self.vertices[parent_id]._add_children(children_ids)
 
-    def update_split(self, partition, taus, split_vertex, parent):
+    def _update_split(self, partition, taus, split_vertex, parent):
         new_vertices = []
         for i, subset in enumerate(partition):
             vertex = HierarchicalMSMVertex(self, subset, parent, \
@@ -257,7 +246,10 @@ class HierarchicalMSMTree:
             split_vertex.tau *= 2 #TODO: this should be dependend on the partition
 
         self.vertices[parent]._add_children(new_vertices)
-        self.update_vertex(parent, update_children=True)
+        # update all the children of the new parent
+        for child in self.vertices[parent].children:
+            self.update_vertex(child, update_parent=False)
+        # now that all the children are updated, update the parent
 
     def _assign_children_to_parents(self, parents_2_new_microstates):
         for new_parent, children in parents_2_new_microstates.items():
@@ -269,20 +261,32 @@ class HierarchicalMSMTree:
         for new_parent in parents_2_new_microstates.keys():
             self.update_vertex(new_parent)
 
+    def _move_children(self, previous_parent_id, parent_2_children, update_parent):
+        previous_parent = self.vertices[previous_parent_id]
+        # move all the children:
+        for new_parent, children in parent_2_children.items():
+            previous_parent._remove_children(children)
+            if previous_parent.height==1: # the children are microstates
+                for child in children:
+                    self._microstate_parents[child] = new_parent
+            else:
+                for child in children:
+                    self.vertices[child]._set_parent(new_parent)
+        # update all the parents
+        if previous_parent.n == 0: # this vertex is now empty, we want to delete it
+            del self.vertices[previous_parent_id]
+            self.vertices[previous_parent.parent]._remove_children([previous_parent_id])
+            if update_parent:
+                self.update_vertex(previous_parent.parent)
+        else: # otherwise update the vertex
+            self.update_vertex(previous_parent_id, update_parent)
+
+        for new_parent in parent_2_children:
+            self.update_vertex(new_parent, update_parent)
 
 
-    def set_parent(self, parent_id, children_ids):
-        if not self._assert_valid_vertex(parent_id):
-            raise ValueError("Got parent_id for non-existing id")
 
-        if not isinstance(children_ids, Iterable):
-            children_ids = [children_ids]
-
-        self._disconnect_from_parents(children_ids, parent_id)
-        self._connect_to_new_parent(children_ids, parent_id)
-        self.vertices[parent_id].update(update_children=True)
-
-    def update_vertex(self, vertex_id, update_children=False, update_parent=True):
+    def update_vertex(self, vertex_id, update_parent=True):
         """
         Trigger a vertex to update its state (transition matrix, timescale, etc).
 
@@ -294,7 +298,20 @@ class HierarchicalMSMTree:
         if self._is_microstate(vertex_id):
             return
         vertex = self.vertices[vertex_id]
-        vertex.update(update_children, update_parent)
+        result, update = vertex.update()
+        if result==SPLIT:
+            partition, taus, split_vertex, parent = update
+            self._update_split(partition, taus, split_vertex, parent)
+            if update_parent:
+                self.update_vertex(parent)
+        elif result==DISOWN_CHILDREN:
+            self._move_children(vertex_id, update, update_parent)
+        elif result==UPDATE_PARENT and update_parent:
+            parent = self.vertices[vertex_id].parent
+            self.update_vertex(parent)
+        else:
+            assert result==SUCCESS, f"Got unknown update result from vertex {vertex_id}"
+
 
     def add_vertex(self, vertex):
         """

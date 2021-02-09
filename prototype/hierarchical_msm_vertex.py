@@ -2,6 +2,7 @@ import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
+from .hierarchical_msm_tree import HierarchicalMSMTree
 
 
 class HierarchicalMSMVertex:
@@ -106,10 +107,10 @@ class HierarchicalMSMVertex:
     def parent_update_threshold(self):
         return self.config["parent_update_threshold"]
 
-    def _set_parent(self, parent):
+    def set_parent(self, parent):
         self.parent = parent
 
-    def _add_children(self, children_ids):
+    def add_children(self, children_ids):
         """
         Add children to this tree.
         NOTE: this should *only* be called by HierarchicalMSMTree as this does NOT do anything to
@@ -118,7 +119,7 @@ class HierarchicalMSMVertex:
         self._children.update(children_ids)
         self._T_is_updated = False
 
-    def _remove_children(self, children_ids):
+    def remove_children(self, children_ids):
         """
         NOTE: this should *only* be called by HierarchicalMSMTree as this does NOT do anything to
         maintain a valid tree structure - only changes local variables of this vertex
@@ -126,13 +127,8 @@ class HierarchicalMSMVertex:
         self._children -= set(children_ids)
         self._T_is_updated = False
 
-    def update(self, update_children=False, update_parent=True):
-        if update_children:
-            for child in self._children:
-                self.tree.update_vertex(child, update_parent=False)
-        self._update_T()
-        if self._check_parent_update_condition() and update_parent:
-            self.tree.update_vertex(self.parent)
+    def update(self):
+        return self._update_T()
 
 
     def _check_parent_update_condition(self):
@@ -184,14 +180,7 @@ class HierarchicalMSMVertex:
 
         if len(vertices_to_disown) > 0:
             assert not self.is_root
-            for new_parent, children in vertices_to_disown.items():
-                self._remove_children(children)
-                self.tree._connect_to_new_parent(children, new_parent)
-            self._update_T() # now recalculate without disowned children
-            for new_parent in vertices_to_disown.keys(): #only after everyone was reassigned update
-                self.tree.update_vertex(new_parent, update_parent=False)
-            return
-
+            return HierarchicalMSMTree.DISOWN_CHILDREN, vertices_to_disown
 
         self._T_is_updated = True #Set this to false to always recalculate T
 
@@ -205,7 +194,10 @@ class HierarchicalMSMVertex:
 
 
         if self._check_split_condition():
-            self.split()
+            return HierarchicalMSMTree.SPLIT, self._split()
+        if self._check_parent_update_condition():
+            return HierarchicalMSMTree.UPDATE_PARENT, None
+        return HierarchicalMSMTree.SUCCESS, None
 
     def _get_id_2_index_map(self, column_ids):
         """Return a dict that maps each id to the index of its row/column in T, and the
@@ -320,10 +312,7 @@ class HierarchicalMSMVertex:
         # return (partition, taus) where partition is an iterable of iterables of children_ids
         return self.config["split_method"](self)
 
-    def split(self):
-        # 1. get partition compatible with max_timescale
-        # 2. create new vertices according to this partition
-        # 3. update tree structure
+    def _split(self):
         index_partition, taus = self._get_partition()
         if len(index_partition)==1:
             warnings.warn(f"split was called, but {self.config['split_method']} was unable to \
@@ -332,7 +321,7 @@ class HierarchicalMSMVertex:
         id_partition = [ [self.index_2_id[index] for index in subset] \
                             for subset in index_partition]
 
-        self.tree.update_split(id_partition, taus, self, self.parent)
+        return id_partition, taus, self, self.parent
 
     def sample_microstate(self, n_samples):
         """Get a microstate from this MSM, ideally chosen such that sampling a random walk from
