@@ -143,7 +143,7 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
 
         while not stop_condition(n_samples, time.time(), timescale):
             microstates = self.hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
-            self._batch_sample_and_estimate(microstates)
+            self._batch_sample_and_expand(microstates)
             n_samples += batch_size
             timescale = self.hmsm_tree.get_longest_timescale(self.sampler.dt)
 
