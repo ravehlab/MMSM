@@ -32,8 +32,8 @@ class BrownianDynamicsSampler:
     def sample_from_point(self, point, sample_len, tau):
         traj = []
         x = point.copy()
-        for j in range(sample_len*tau + 1):
-            if j%tau == 1:
+        for j in range(sample_len*tau):
+            if j%tau == 0:
                 traj.append(x)
             x = self._BD_step(x)
         return np.array(traj)

@@ -4,15 +4,15 @@ import numpy as np
 from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
 from HMSM.prototype.hmsm_config import get_default_config
 
-def _get_stop_condition(max_time, max_samples, max_timescale):
+def _get_stop_condition(max_cputime, max_samples, max_timescale):
     # TODO: consider moving somewhere more logical
     # TODO: Add at least a brief doc
     stop_conditions = []
 
-    if max_time is not None:
+    if max_cputime is not None:
         start_time = time.time()
         stop_conditions.append(lambda n_samples, current_time, timescale: \
-                                    current_time > start_time + max_time)
+                                    current_time > start_time + max_cputime)
     if max_samples is not None:
         stop_conditions.append(lambda n_samples, current_time, timescale: \
                                     n_samples > max_samples)
@@ -131,12 +131,12 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
             Minimum timescale of the full HMSM, after which to stop sampling.
         """
 
-        if max_time is max_samples is max_timescale is None:
-            warnings.warn("At least one of the parameters max_time, max_samples, or \
+        if max_cputime is max_samples is max_timescale is None:
+            warnings.warn("At least one of the parameters max_cputime, max_samples, or \
                               max_timescale must be given")
             return
 
-        stop_condition = _get_stop_condition(max_time, max_samples, max_timescale)
+        stop_condition = _get_stop_condition(max_cputime, max_samples, max_timescale)
         n_samples = 0
         timescale = np.inf
         batch_size = self.batch_size
@@ -146,6 +146,7 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
             self._batch_sample_and_expand(microstates)
             n_samples += batch_size
             timescale = self.hmsm_tree.get_longest_timescale(self.sampler.dt)
+            print(n_samples, time.time(), timescale)
 
     def _batch_sample_and_expand(self, microstates):
         dtrajs = self.sampler.sample_from_microstates(microstates,\

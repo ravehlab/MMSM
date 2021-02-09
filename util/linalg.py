@@ -137,6 +137,6 @@ def get_longest_timescale(P, tau):
         two_largest = np.argpartition(-w, 2)[:2]
         lambda_2 = w[two_largest][1]
 
-    t_2 = (-tau)/np.log(lambda_2)
+    t_2 = np.abs(tau/np.log(lambda_2))
     return t_2
 

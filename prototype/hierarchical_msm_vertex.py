@@ -2,7 +2,6 @@ import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
-from .hierarchical_msm_tree import HierarchicalMSMTree
 
 
 class HierarchicalMSMVertex:
@@ -14,6 +13,10 @@ class HierarchicalMSMVertex:
     probabilities change due to new data.
     """
 
+    SPLIT = "SPLIT"
+    DISOWN_CHILDREN = "DISOWN_CHILDREN"
+    UPDATE_PARENT = "UPDATE_PARENT"
+    SUCCESS = "SUCCESS"
 
     def __init__(self, tree, children, parent, tau, height, config):
         """__init__.
@@ -58,6 +61,7 @@ class HierarchicalMSMVertex:
 
         self._T_is_updated = False
         self._last_update_sent = None
+        print(f"NEW vertex: {self.id}")
 
 
 
@@ -125,6 +129,9 @@ class HierarchicalMSMVertex:
         maintain a valid tree structure - only changes local variables of this vertex
         """
         self._children -= set(children_ids)
+        print(f"{self.id} removed children {children_ids}")
+        for child in children_ids:
+            assert child not in self.children
         self._T_is_updated = False
 
     def update(self):
@@ -136,15 +143,15 @@ class HierarchicalMSMVertex:
             return False
         if self._last_update_sent is None:
             return True
+        if set(self._last_update_sent[0]) != set(self.get_external_T()[0]):
+            return True
+
         max_change_factor = util.max_fractional_difference(self._last_update_sent, \
                                                       self.get_external_T())
         return max_change_factor >= self.parent_update_threshold
 
     def _update_T(self):
-        if len(self._children) == 0:
-            self._T = self._T_tau = self._timescale = None
-            self._T_is_updated = True
-            return
+        assert self.n > 0
         T_rows = dict()
         column_ids = set(self.children)
 
@@ -180,7 +187,7 @@ class HierarchicalMSMVertex:
 
         if len(vertices_to_disown) > 0:
             assert not self.is_root
-            return HierarchicalMSMTree.DISOWN_CHILDREN, vertices_to_disown
+            return HierarchicalMSMVertex.DISOWN_CHILDREN, vertices_to_disown
 
         self._T_is_updated = True #Set this to false to always recalculate T
 
@@ -194,10 +201,10 @@ class HierarchicalMSMVertex:
 
 
         if self._check_split_condition():
-            return HierarchicalMSMTree.SPLIT, self._split()
+            return HierarchicalMSMVertex.SPLIT, self._split()
         if self._check_parent_update_condition():
-            return HierarchicalMSMTree.UPDATE_PARENT, None
-        return HierarchicalMSMTree.SUCCESS, None
+            return HierarchicalMSMVertex.UPDATE_PARENT, None
+        return HierarchicalMSMVertex.SUCCESS, None
 
     def _get_id_2_index_map(self, column_ids):
         """Return a dict that maps each id to the index of its row/column in T, and the
@@ -317,10 +324,9 @@ class HierarchicalMSMVertex:
         if len(index_partition)==1:
             warnings.warn(f"split was called, but {self.config['split_method']} was unable to \
                             find a partition", RuntimeWarning)
-            return
         id_partition = [ [self.index_2_id[index] for index in subset] \
                             for subset in index_partition]
-
+        
         return id_partition, taus, self, self.parent
 
     def sample_microstate(self, n_samples):
