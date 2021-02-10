@@ -224,8 +224,9 @@ class HierarchicalMSMTree:
             new_vertices.append(vertex.id)
 
 
-        if not self._is_root(split_vertex.id):
+        if not split_vertex.is_root:
             # remove the vertex that split
+            neighbors = split_vertex.neighbors
             self.vertices[parent].remove_children([split_vertex.id])
             del self.vertices[split_vertex.id]
             print(f"Tree: removed vertex {split_vertex.id}")
@@ -239,6 +240,12 @@ class HierarchicalMSMTree:
         # update all the children of the new parent
         for child in self.vertices[parent].children:
             self.update_vertex(child, update_parent=False)
+        # update any neighbors of the removed vertex, if they haven't been updated yet
+        if not split_vertex.is_root:
+            for neighbor in neighbors:
+                if self.get_parent(neighbor) != parent:
+                    self.update_vertex(neighbor)
+
         # now that all the children are updated, update the parent
         return True
 
@@ -256,14 +263,23 @@ class HierarchicalMSMTree:
                     self.vertices[child].set_parent(new_parent)
         # update all the parents
         if previous_parent.n == 0: # this vertex is now empty, we want to delete it
+            neighbors = previous_parent.neighbors
             del self.vertices[previous_parent_id]
             print(f"Tree: removed vertex {previous_parent_id}")
             self.vertices[previous_parent.parent].remove_children([previous_parent_id])
+            # update the neighbors of the removed vertex
+            for neighbor in neighbors:
+                self.update_vertex(neighbor)
+                if parent_2_children.get(neighbor) is not None:
+                    parent_2_children.pop(neighbor) # so we don't update it again afterwards
+
+
             if update_parent:
                 self.update_vertex(previous_parent.parent)
         else: # otherwise update the vertex
             self.update_vertex(previous_parent_id, update_parent)
 
+        # update the vertices that had vertices added 
         for new_parent in parent_2_children:
             self.update_vertex(new_parent, update_parent)
 

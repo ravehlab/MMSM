@@ -104,6 +104,11 @@ class HierarchicalMSMVertex:
             self._timescale = linalg.get_longest_timescale(T_inner, self.tau)
 
     @property
+    def neighbors(self):
+        assert self._T_is_updated
+        return [self.index_2_id[i] for i in range(self.n, self._T.shape[0])]
+
+    @property
     def is_root(self):
         return self.parent == self.id
 
@@ -129,7 +134,6 @@ class HierarchicalMSMVertex:
         maintain a valid tree structure - only changes local variables of this vertex
         """
         self._children -= set(children_ids)
-        print(f"{self.id} removed children {children_ids}")
         for child in children_ids:
             assert child not in self.children
         self._T_is_updated = False
@@ -198,7 +202,6 @@ class HierarchicalMSMVertex:
         self._T_tau = np.linalg.matrix_power(self._T, self.tau)
         self._update_timescale()
         self._update_external_T()
-
 
         if self._check_split_condition():
             return HierarchicalMSMVertex.SPLIT, self._split()
