@@ -7,16 +7,13 @@ class UniquePriorityQueue:
     A class for a simple priority queue, with no duplicate values (even if they have different
     priorities).
     """
-
-
     def __init__(self):
-        self._queue = PriorityQueue
+        self._queue = PriorityQueue()
         self._items = set()
 
-    @property
     def not_empty(self):
         """
-        True iff the queue is not empty
+        Returns True iff the queue is not empty
         """
         return len(self._items) > 0
 
@@ -33,12 +30,13 @@ class UniquePriorityQueue:
             return
         self._items.add(item[1])
         self._queue.put(item)
+        return item
 
     def get(self):
         """
         Get a value from the queue with minimal priority. If the queue is empty returns None.
         """
-        if self.not_empty:
+        if self.not_empty():
             _, item = self._queue.get()
             self._items.remove(item)
             return item

@@ -20,24 +20,36 @@ class BrownianDynamicsSampler:
                 trajs.append(self.sample_from_point(point, sample_len, tau))
         return self._get_dtrajs(trajs)
 
-    def sample_from_microstates(self, microstates, sample_len, n_samples, tau):
+    def _sample_from_microstates_depracated(self, microstates, sample_len, n_samples, tau):
         trajs = []
         for microstate in microstates:
             for _ in range(n_samples):
                 x = self.coarse_grain.sample_from(microstate)
                 traj = self.sample_from_point(x, sample_len, tau)
                 trajs.append(traj)
-        return self._get_dtrajs(trajs)
+        dtrajs = self._get_dtrajs(trajs)
+
+    def sample_from_microstates(self, microstates, sample_len, n_samples, tau):
+        dtrajs = []
+        for microstate in microstates:
+            for _ in range(n_samples):
+                x = self.coarse_grain.sample_from(microstate)
+                traj = self.sample_from_point(x, sample_len, tau)
+                dtraj = [microstate] + self._get_dtraj(traj)
+                dtrajs.append(dtraj)
+        return dtrajs
 
     def sample_from_point(self, point, sample_len, tau):
-        traj = []
         x = point.copy()
-        for j in range(sample_len*tau):
-            if j%tau == 0:
-                traj.append(x)
-            x = self._BD_step(x)
+        traj = []
+        for j in range(sample_len-1):
+            for i in range(tau):
+                x = self._BD_step(x)
+            traj.append(x)
         return np.array(traj)
 
+    def _get_dtraj(self, traj):
+        return self.coarse_grain.get_coarse_grained_clusters(traj)
 
     def _get_dtrajs(self, trajs):
         dtrajs = []

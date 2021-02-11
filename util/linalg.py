@@ -24,6 +24,8 @@ def _assert_stacked_square(array):
         raise LinAlgError('Last 2 dimensions of the array must be square')
 
 def _assert_stochastic(array, axis=1):
+    if np.any(array < 0):
+        raise LinAlgError(f"Array can not have negative values")
     if not np.all(np.isclose(np.sum(array, axis=axis), 1)):
         raise LinAlgError(f"Array must sum to 1 across axis {axis}")
 
@@ -116,7 +118,7 @@ def connected_components(E):
 def normalize_rows(matrix:np.ndarray, norm:int=2)->np.ndarray:
     _assert_finite(matrix)
     normalized = matrix/np.linalg.norm(matrix, norm, axis=1)[:, None]
-    return np.nan_to_num(normalized)
+    return np.nan_to_num(normalized, posinf=1.)
 
 
 def normalized_laplacian(P):
