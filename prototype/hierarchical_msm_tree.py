@@ -266,8 +266,6 @@ class HierarchicalMSMTree:
             return
         height = self.vertices[vertex_id].height
         result = self._update_queue.put(item=(height, vertex_id))
-        if result:
-            print("ADDED TO UPDATE QUEUE: ", (height, vertex_id))
 
     def _do_all_updates_by_height(self):
         """
@@ -282,9 +280,7 @@ class HierarchicalMSMTree:
             vertex = self.vertices.get(vertex_id)
             if vertex is None:
                 continue # this vertex no longer exists
-            print("UPDATING: ", vertex_id, vertex.height)
             result, update = vertex.update()
-            print(result)
             if result==HierarchicalMSMVertex.SPLIT:
                 partition, taus, split_vertex, parent = update
                 self._update_split(partition, taus, split_vertex, parent)
@@ -310,13 +306,11 @@ class HierarchicalMSMTree:
         assert isinstance(vertex, HierarchicalMSMVertex)
         assert vertex.tree is self
         self.vertices[vertex.id] = vertex
-        print(f"Tree: added vertex {vertex.id}")
 
     def _remove_vertex(self, vertex):
         parent = self.get_parent(vertex)
         del self.vertices[vertex]
         self.vertices[parent].remove_children([vertex])
-        print(f"Tree: removed vertex {vertex}")
         # update the parent and neighbors of the removed vertex
         for other_vertex in self.vertices.values(): #TODO find less wasteful way to do this
             if hasattr(other_vertex, '_external_T'):
