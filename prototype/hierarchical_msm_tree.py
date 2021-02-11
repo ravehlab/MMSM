@@ -121,16 +121,14 @@ class HierarchicalMSMTree:
             return ids, ext_T
         return self.vertices[vertex_id].get_external_T(tau)
 
-    def get_longest_timescale(self, dt=1):
-        """
-        Get the timescale associated with the slowest process represented by the HMSM
+    def get_microstates(self, vertex):
+        return self.vertices[vertex].get_all_microstates()
 
-        Parameters
-        ----------
-        dt : float
-            The timestep size of the simulation
+    def get_longest_timescale(self):
         """
-        return self.vertices[self.root].timescale * dt * self.config["base_tau"]
+        Get the timescale associated with the slowest process represented by the HMSM.
+        """
+        return self.vertices[self.root].timescale
 
     def update_model_from_trajectories(self, dtrajs, update_MMSE=True):
         """

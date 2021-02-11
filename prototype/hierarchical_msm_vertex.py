@@ -371,3 +371,11 @@ class HierarchicalMSMVertex:
         for i, vertex in enumerate(vertices):
             recursive_sample += self.tree.sample_microstate(counts[i], vertex)
         return recursive_sample
+
+    def get_all_microstates(self):
+        if self.height == 1:
+            return self.children
+        microstates = set()
+        for child in self.children:
+            microstates.update(self.tree.get_microstates(child))
+        return microstates
