@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib as mpl
 from numpy.linalg import LinAlgError
 from sklearn.cluster import MiniBatchKMeans
+import warnings; warnings.simplefilter('default')
 
 sample_from_ndarray = lambda array, n : array[np.random.choice(array.shape[0], n, replace=False)] \
                                         if n<=array.shape[0] else array.copy()
@@ -138,7 +139,7 @@ def get_longest_timescale(P, tau):
     else:
         two_largest = np.argpartition(-w, 2)[:2]
         lambda_2 = w[two_largest][1]
-        if np.isclose(lambda_2, 1):
+        if np.isclose(np.log(lambda_2), 0):
             return np.inf
 
     t_2 = np.abs(tau/np.log(lambda_2))

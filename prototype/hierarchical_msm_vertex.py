@@ -348,7 +348,6 @@ class HierarchicalMSMVertex:
         if len(index_partition)==1:
             warnings.warn(f"split was called, but {self.config['split_method']} was unable to \
                             find a partition", RuntimeWarning)
-            self.tau *= 2
         id_partition = [ [self.index_2_id[index] for index in subset] \
                             for subset in index_partition]
         

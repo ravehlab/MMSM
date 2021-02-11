@@ -10,7 +10,7 @@ def get_default_config(**kwargs):
               "split_condition" : get_size_or_timescale_split_condition(),
               "split_method" : two_fold_gibbs_split,
               "sample_method" : uniform_sample,
-              "parent_update_threshold" : 0.2
+              "parent_update_threshold" : 0.1
              }
     config.update(kwargs)
     return config
