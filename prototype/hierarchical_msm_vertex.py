@@ -55,6 +55,7 @@ class HierarchicalMSMVertex:
             self.parent = parent
         self.tau = tau
         self.height = height
+        self._neighbors = []
 
 
         self.config = config
@@ -105,8 +106,7 @@ class HierarchicalMSMVertex:
 
     @property
     def neighbors(self):
-        assert self._T_is_updated
-        return [self.index_2_id[i] for i in range(self.n, self._T.shape[0])]
+        return self._neighbors
 
     @property
     def is_root(self):
@@ -134,9 +134,9 @@ class HierarchicalMSMVertex:
         maintain a valid tree structure - only changes local variables of this vertex
         """
         self._children -= set(children_ids)
-        for child in children_ids:
-            assert child not in self.children
         self._T_is_updated = False
+        if self.n==0:
+            print(f"{self.id} EMPTY")
 
     def update(self):
         return self._update_T()
@@ -173,40 +173,34 @@ class HierarchicalMSMVertex:
         n_external = full_n - self.n # number of external vertices
 
         # Now fill the matrix self._T
-        vertices_to_disown = dict()
         for child, (ids, T_row) in T_rows.items():
             row = id_2_index[child]
             for id, transition_probability in zip(ids, T_row):
                 column = id_2_index[id]
                 self._T[row, column] += transition_probability
 
-            # check if this vertex should be in one of my neighbors instead:
-            most_likely_parent = self._get_most_likely_parent(self._T[row], n_external)
-            if most_likely_parent != self.id:
-                if vertices_to_disown.get(most_likely_parent) is None:
-                    vertices_to_disown[most_likely_parent] = [child]
-                else:
-                    vertices_to_disown[most_likely_parent].append(child)
-
-
-        if len(vertices_to_disown) > 0:
-            assert not self.is_root
-            return HierarchicalMSMVertex.DISOWN_CHILDREN, vertices_to_disown
-
-        self._T_is_updated = True #Set this to false to always recalculate T
-
         #make the external vertices sinks
         self._T[self.n:, self.n:] = np.eye(n_external)
         linalg._assert_stochastic(self._T)
         # get the transition matrix in timestep resolution self.tau
         self._T_tau = np.linalg.matrix_power(self._T, self.tau)
+
+        # check if there are any children which should be one of my neighbors children instead
+        vertices_to_disown = self._check_disown(id_2_index, n_external)
+        if vertices_to_disown:
+            self._T_is_updated = False
+            return HierarchicalMSMVertex.DISOWN_CHILDREN, vertices_to_disown
+        self._T_is_updated = True
         self._update_timescale()
         self._update_external_T()
 
+
         if self._check_split_condition():
             return HierarchicalMSMVertex.SPLIT, self._split()
+
         if self._check_parent_update_condition():
             return HierarchicalMSMVertex.UPDATE_PARENT, None
+
         return HierarchicalMSMVertex.SUCCESS, None
 
     def _get_id_2_index_map(self, column_ids):
@@ -240,12 +234,31 @@ class HierarchicalMSMVertex:
         full_n = len(index_2_id)
         return id_2_index, index_2_id, full_n
 
+    def _check_disown(self, id_2_index, n_external):
+        vertices_to_disown = dict()
+        for child in self.children:
+            row = id_2_index[child]
+            most_likely_parent = self._get_most_likely_parent(self._T[row], n_external)
+            if most_likely_parent != self.id:
+                if vertices_to_disown.get(most_likely_parent) is None:
+                    vertices_to_disown[most_likely_parent] = [child]
+                else:
+                    vertices_to_disown[most_likely_parent].append(child)
+        if len(vertices_to_disown) > 0:
+            return vertices_to_disown
+        else:
+            return False
+
+
     def _get_most_likely_parent(self, row, n_external):
         temp_row = np.ndarray(1+n_external)
         temp_row[0] = np.sum(row[:self.n])
         temp_row[1:] = row[self.n:]
         maximum = np.argmax(temp_row)
         if maximum > 0:
+            # argmax returns the highest maximal index, if it's the same as 0, we want to keep it
+            if temp_row[maximum] == temp_row[0]:
+                return self.id
             new_parent = self.index_2_id[self.n + maximum - 1]
             return new_parent
         return self.id
@@ -287,7 +300,6 @@ class HierarchicalMSMVertex:
         return ids.copy(), external_T.copy()
 
     def _update_external_T(self):
-        assert self._T_is_updated
         T = self._T # this is T(1) as opposed to self.T which is T(tau)
         n = self.n
         local_stationary = self.get_local_stationary_distribution()
@@ -308,6 +320,7 @@ class HierarchicalMSMVertex:
             ids[j] = self.index_2_id[n+j-1]
 
         self._external_T = ids, external_T
+        self._neighbors = ids[1:]
 
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
         # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,
@@ -327,6 +340,7 @@ class HierarchicalMSMVertex:
         if len(index_partition)==1:
             warnings.warn(f"split was called, but {self.config['split_method']} was unable to \
                             find a partition", RuntimeWarning)
+            self.tau *= 2
         id_partition = [ [self.index_2_id[index] for index in subset] \
                             for subset in index_partition]
         

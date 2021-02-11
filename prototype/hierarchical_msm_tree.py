@@ -31,7 +31,7 @@ class HierarchicalMSMTree:
         self._microstate_MMSE = dict()
         self._last_update_sent = dict()
         self.config = config
-        self._update_queue = UniquePriorityQueue
+        self._update_queue = UniquePriorityQueue()
 
         self.vertices = dict()
 
@@ -225,24 +225,19 @@ class HierarchicalMSMTree:
             self._add_vertex(vertex)
             self._connect_to_new_parent(subset, vertex.id)
             new_vertices.append(vertex.id)
+            self._update_vertex(vertex.id)
 
 
 
         if not split_vertex.is_root:
-            # remove the vertex that split
-            neighbors = split_vertex.neighbors
-            self.vertices[parent].remove_children([split_vertex.id])
-            del self.vertices[split_vertex.id]
-            print(f"Tree: removed vertex {split_vertex.id}")
-            # update all neighbors of the removed vertex
-            for neighbor in neighbors:
-                self._update_vertex(neighbor)
+            self.vertices[parent].add_children(new_vertices)
+            self._remove_vertex(split_vertex.id)
         else:
             # the root is going up a level, so it's children will be the new vertices
             split_vertex.remove_children(split_vertex.children)
+            self.vertices[parent].add_children(new_vertices)
             split_vertex.height += 1
-            split_vertex.tau *= 2 #TODO: this should be dependend on the partition
-        self.vertices[parent].add_children(new_vertices)
+            split_vertex.tau *= 2 #TODO: this should be dependent on the partition
         self._update_vertex(parent)
 
 
@@ -259,24 +254,20 @@ class HierarchicalMSMTree:
                 for child in children:
                     self.vertices[child].set_parent(new_parent)
             self._update_vertex(new_parent)
+
         if previous_parent.n == 0: # this vertex is now empty, we want to delete it
-            del self.vertices[previous_parent_id]
-            self.vertices[previous_parent.parent].remove_children([previous_parent_id])
-            print(f"Tree: removed vertex {previous_parent_id}")
-            # update the parent and neighbors of the removed vertex
-            self._update_vertex(previous_parent.parent)
-            for neighbor in previous_parent.neighbors:
-                self._update_vertex(neighbor)
-            return
-        self._update_vertex(previous_parent_id)
+            self._remove_vertex(previous_parent_id)
+        else:
+            self._update_vertex(previous_parent_id)
 
 
     def _update_vertex(self, vertex_id):
         if self._is_microstate(vertex_id):
             return
         height = self.vertices[vertex_id].height
-        self._update_queue((height, vertex_id))
-
+        result = self._update_queue.put(item=(height, vertex_id))
+        if result:
+            print("ADDED TO UPDATE QUEUE: ", (height, vertex_id))
 
     def _do_all_updates_by_height(self):
         """
@@ -286,9 +277,12 @@ class HierarchicalMSMTree:
         children to another vertex, or a change in transition rates that neccesitates the parent
         being updated), the other vertex will be added to the queue.
         """
-        while not self._update_queue.empty():
-            _, vertex_id = self._update_queue.get()
-            vertex = self.vertices[vertex_id]
+        while self._update_queue.not_empty():
+            vertex_id = self._update_queue.get()
+            vertex = self.vertices.get(vertex_id)
+            if vertex is None:
+                continue # this vertex no longer exists
+            print("UPDATING: ", vertex_id, vertex.height)
             result, update = vertex.update()
             print(result)
             if result==HierarchicalMSMVertex.SPLIT:
@@ -297,7 +291,7 @@ class HierarchicalMSMTree:
             elif result==HierarchicalMSMVertex.DISOWN_CHILDREN:
                 self._move_children(vertex_id, update)
             elif result==HierarchicalMSMVertex.UPDATE_PARENT:
-                parent = self.vertices[vertex_id].parent
+                parent = self.get_parent(vertex_id)
                 self._update_vertex(parent)
             else:
                 assert result==HierarchicalMSMVertex.SUCCESS, f"Got unknown update result {result} \
@@ -317,6 +311,27 @@ class HierarchicalMSMTree:
         assert vertex.tree is self
         self.vertices[vertex.id] = vertex
         print(f"Tree: added vertex {vertex.id}")
+
+    def _remove_vertex(self, vertex):
+        parent = self.get_parent(vertex)
+        del self.vertices[vertex]
+        self.vertices[parent].remove_children([vertex])
+        print(f"Tree: removed vertex {vertex}")
+        # update the parent and neighbors of the removed vertex
+        for other_vertex in self.vertices.values(): #TODO find less wasteful way to do this
+            if hasattr(other_vertex, '_external_T'):
+                if vertex in other_vertex._external_T[0]:
+                    self._update_vertex(other_vertex.id)
+        
+        # If the parent is now empty, remove it too.
+        if self.vertices[parent].n==0:
+            self._remove_vertex(parent)
+        else:
+            self._update_vertex(parent)
+
+        assert vertex not in self._microstate_parents.values()
+        for v in self.vertices.values():
+            assert v.parent is not vertex
 
     def sample_random_walk(self, sample_length, start=None):
         """
