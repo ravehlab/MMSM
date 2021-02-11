@@ -1,3 +1,4 @@
+from collections import defaultdict
 import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
@@ -62,8 +63,6 @@ class HierarchicalMSMVertex:
 
         self._T_is_updated = False
         self._last_update_sent = None
-        print(f"NEW vertex: {self.id}")
-
 
 
     @property
@@ -101,7 +100,7 @@ class HierarchicalMSMVertex:
         if self.n == 1:
             self._timescale = 0
         else:
-            T_inner = linalg.normalize_rows(self.T[:n, :n], norm=1)
+            T_inner = linalg.normalize_rows(self._T[:n, :n], norm=1)
             self._timescale = linalg.get_longest_timescale(T_inner, self.tau)
 
     @property
@@ -135,8 +134,6 @@ class HierarchicalMSMVertex:
         """
         self._children -= set(children_ids)
         self._T_is_updated = False
-        if self.n==0:
-            print(f"{self.id} EMPTY")
 
     def update(self):
         return self._update_T()
@@ -235,19 +232,30 @@ class HierarchicalMSMVertex:
         return id_2_index, index_2_id, full_n
 
     def _check_disown(self, id_2_index, n_external):
-        vertices_to_disown = dict()
+        vertices_to_disown = defaultdict(list)
         for child in self.children:
             row = id_2_index[child]
             most_likely_parent = self._get_most_likely_parent(self._T[row], n_external)
             if most_likely_parent != self.id:
-                if vertices_to_disown.get(most_likely_parent) is None:
-                    vertices_to_disown[most_likely_parent] = [child]
-                else:
+                # Double check, otherwise we get into loops of children being passed back and forth
+                if self.id not in self._get_most_likely_parents_MC(child):
                     vertices_to_disown[most_likely_parent].append(child)
+
         if len(vertices_to_disown) > 0:
             return vertices_to_disown
-        else:
-            return False
+        return False
+
+    def _get_most_likely_parents_MC(self, child):
+        parent_sample = []
+        for i in range(100):
+            step = child
+            for j in range(self.tau):
+                next_states, transition_probabilities = self.tree.get_external_T(step)
+                step = np.random.choice(next_states, p=transition_probabilities)
+            parent_sample.append(self.tree.get_parent(step))
+        parents, counts = np.unique(parent_sample, return_counts=True)
+        return parents[np.where(counts==max(counts))]
+
 
 
     def _get_most_likely_parent(self, row, n_external):
