@@ -3,29 +3,13 @@ import time
 import numpy as np
 from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
 from HMSM.prototype.hmsm_config import get_default_config
+from HMSM.util import util
 
-def _get_stop_condition(max_cputime, max_samples, max_timescale):
-    # TODO: consider moving somewhere more logical
-    # TODO: Add at least a brief doc
-    stop_conditions = []
-
-    if max_cputime is not None:
-        start_time = time.time()
-        stop_conditions.append(lambda n_samples, current_time, timescale: \
-                                    current_time > start_time + max_cputime)
-    if max_samples is not None:
-        stop_conditions.append(lambda n_samples, current_time, timescale: \
-                                    n_samples > max_samples)
-    if max_timescale is not None:
-        stop_conditions.append(lambda n_samples, current_time, timescale: \
-                                    timescale > max_timescale)
-    return lambda *args: np.any([condition(*args) for condition in stop_conditions])
-
-class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
+class HierarchicalMSM:
     """HierarchicalMSM.
     This class is used to build and manage a hierarchical MSM over some energy landscape, as will
-    be described in Clein et al. 2021. It relies on the provided sampler to explore microstates, that
-    are stored at the vertices of lowest (highest-resolution) level in the MSM. It then creates
+    be described in Clein et al. 2021. It relies on the provided sampler to explore microstates, 
+    that are stored at the vertices of lowest (highest-resolution) level in the MSM. It then creates
     a hierarchical (multiscale) map of the states in the configuration space, and stores it in a 
     HierarchicalMSMTree data structure.
 
@@ -49,21 +33,21 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
         sample_len: int
             The length of each sample in a single batch of samples
         base_tau: int
-            The timestep resolution of the discrete trajectories used to estimate the HMSM, as 
-            multiples of the dt of the sampler; i.e. if base_tau==5, and sampler.dt==2e-15, then
-            the trajectories used to estimate the HMSM will be in timesteps of 5*2e-15=10e-15
-            seconds.
-        split_condition: function
+            The number of sampler timesteps to skip between each sample used to estimate the HMSM.
+            For example if base_tau is 5, and the sampler creates a trajectory (x0, ..., x15), then
+            the sub-sampled trajectory (x0, x5, x10, x15) will be used to estimate transition rates
+            of the HMSM.
+        split_condition: callable
             A function that takes an HierarchicalMSMVertex and returns True if this vertex should
             split into two or more vertices
-        split_method: function
+        split_method: callable
             A function that takes an HierarchicalMSMVertex v, and returns a tuple
             (partition, taus), where partition is a partition of the vertices of v, and taus is
             a list of the tau of the MSMs representing the partition parts respectively.
-        sample_method: function
-            A function that takes an HierarchicalMSMVertex v, and returns the id of one of its
+        sample_method: callable
+            A function that takes an HierarchicalMSMVertex, and returns the id of one of its
             children in the tree.
-        parent_update_threshold: double
+        parent_update_threshold: float
             The minimum fraction of a change in a transition probability between vertices that will
             trigger the parent of the vertices to update its transition matrix.
 
@@ -84,13 +68,13 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
     TODO: provide example
 
     Continue sampling until the timescale of the longest process described by the HMSM is at least
-    1 second (2e15*sampler.dt = 2e15*2e-15 = 1 second):
+    1 second:
 
-    >>> hmsm.expand(max_timescale=2e15) # TODO: disambiguate the interface - make it crystal clear what the expected result would be
-    >>> tree.get_longest_timescale(dt=sampler.dt)
-    1.52794
-
-
+    >>> hmsm.expand(min_timescale_sec=1)         # tree points to the HierarchicalMSMs tree data
+    >>> timescale = tree.get_longest_timescale() # structure, so it was updated by hmsm.expand 
+    >>> timescale_in_seconds = timescale * hmsm.timestep_in_seconds
+    >>> print(f"The timescale of the slowest process described by this HMSM is {timescale_in_seconds:.1f} seconds")
+    The timescale of the slowest process described by this HMSM is 1.2 seconds
     """
 
 
@@ -100,6 +84,7 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
         self.config.update(config_kwargs)
         self.hmsm_tree = HierarchicalMSMTree(self.config)
         self.n_samples = 0
+        self._effective_timestep_seconds = self.sampler.dt * self.config["base_tau"]
         self._init_sample(start_points)
         
 
@@ -116,39 +101,43 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
     def batch_size(self):
         return self.config["n_microstates"] * self.config["n_samples"] * self.config["sample_len"]
 
-    # TODO: update to expand() everywhere
+    @property
+    def timestep_in_seconds(self):
+        return self._effective_timestep_seconds
+
     # TODO: (long term, not now) - add expand by confidence interval, maybe there should be an expand vs. exploit mode, or jsut
     #        according to parametersw
-    def expand(self, max_cputime=None, max_samples=None, max_timescale=None):
+    def expand(self, max_cputime=np.inf, max_samples=np.inf, min_timescale_sec=np.inf):
         """
         Estimate an HMSM by sampling from the sampler.
 
         Parameters
         ----------
-        max_cputime : # TODO: update to max_cputime everywhere
+        max_cputime : int or float
             Maximum cpu time to run in seconds.
-        max_samples :
+        max_samples : int 
             Maximum number of samples to use.
-        max_timescale :
+        min_timescale_sec :
             Minimum timescale of the full HMSM, after which to stop sampling.
         """
 
-        if max_cputime is max_samples is max_timescale is None:
+        if max_cputime == max_samples == min_timescale_sec == np.inf:
             warnings.warn("At least one of the parameters max_cputime, max_samples, or \
-                              max_timescale must be given")
+                              min_timescale_sec must be given")
             return
 
-        stop_condition = _get_stop_condition(max_cputime, max_samples, max_timescale)
+        max_values = {'n_samples' : max_samples, 'timescale' : min_timescale_sec}
+        stop_condition = util.get_threshold_check_function(max_values, max_time=max_cputime)
         n_samples = 0
         timescale = np.inf
         batch_size = self.batch_size
 
-        while not stop_condition(n_samples, time.time(), timescale):
+        while not stop_condition(n_samples=n_samples, timescale=timescale):
             microstates = self.hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
             self._batch_sample_and_expand(microstates)
             n_samples += batch_size
             self.n_samples += batch_size
-            timescale = self.hmsm_tree.get_longest_timescale(self.sampler.dt)
+            timescale = self.hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
             print(f"Samples used: {self.n_samples}, timescale: {timescale}")
 
     def _batch_sample_and_expand(self, microstates):
