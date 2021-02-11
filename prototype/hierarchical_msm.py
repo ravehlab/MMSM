@@ -99,6 +99,7 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
         self.config = get_default_config()
         self.config.update(config_kwargs)
         self.hmsm_tree = HierarchicalMSMTree(self.config)
+        self.n_samples = 0
         self._init_sample(start_points)
         
 
@@ -108,6 +109,7 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
                                                  self.config["sample_len"],\
                                                  self.config["base_tau"])
         self.hmsm_tree.update_model_from_trajectories(dtrajs)
+        self.n_samples += self.batch_size
 
 
     @property
@@ -145,8 +147,9 @@ class HierarchicalMSM: # TODO: change to HierarchicalMSM everywhere
             microstates = self.hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
             self._batch_sample_and_expand(microstates)
             n_samples += batch_size
+            self.n_samples += batch_size
             timescale = self.hmsm_tree.get_longest_timescale(self.sampler.dt)
-            print(n_samples, time.time(), timescale)
+            print(f"Samples used: {self.n_samples}, timescale: {timescale}")
 
     def _batch_sample_and_expand(self, microstates):
         dtrajs = self.sampler.sample_from_microstates(microstates,\
