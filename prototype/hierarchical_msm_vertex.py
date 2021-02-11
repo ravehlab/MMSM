@@ -1,3 +1,7 @@
+"""HierarchicalMSMVertex"""
+
+# Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
+
 from collections import defaultdict
 import warnings
 import numpy as np
@@ -12,6 +16,64 @@ class HierarchicalMSMVertex:
     describing transition probabilities between its children. This transition matrix is updated
     when changes to the tree structure affecting the vertex are made, or when the transition
     probabilities change due to new data.
+
+    Parameters
+    ----------
+    tree : HierarchicalMSMTree
+        The tree this vertex is part of
+    children : set
+        A set of indices of this vertices children
+    parent : int
+        the id of the parent vertex to this vertex.
+        Note that the root of an HierarchicalMSMTree, is its own parent
+    tau : int
+        the timestep resolution of this MSM, in multiples of the timestep resolution of
+        discrete trajectories given as input to the HierarchicalMSMTree in
+        update_transition_counts.
+
+        For example, if a Molecular Dynamics simulation is sampled in timesteps of 2e-15 seconds,
+        resulting in (x_0, x_1, ..., x_n), and then one every tenth sample is taken (x_0, x_10,...)
+        and discretized into microstates, resulting in (microstate_0, microstate_10, ...) and
+        this trajectory is used as input to HierarchicalMSMTree, the timestep resolution of this
+        discrete trajectory is 10*2e-15=2e-14 seconds. Now if this MSM has tau=5, then the
+        timestep resolution of this MSM is 5*2e-14=1e-13 seconds.
+    height : int
+        the height of this vertex in the tree, where microstates have height 0.
+    config : dict
+        a dictionary of model parameters.
+
+    Attributes
+    ----------
+    id : int
+        The unique identifier of this vertex.
+    tree : HierarchicalMSMTree
+        The HierarchicalMSMTree this vertex is part of.
+    height : int
+        The height of this vertex in the tree, where a height of 1 means this vertex is on the
+        lowest level of the tree, and its MSM represents transitions between microstates.
+    tau : int
+        The number of (TODO rephrase this) steps on the base graph a single step in this MSM
+        represents.
+    children : list[int]
+        A list of the ids of all the children of this vertex in the tree. This vertex represents
+        an MSM describing transitions between these vertices.
+    n : int
+        The number of children of this vertex; the number of vertices in the MSM this vertex
+        represents.
+    neighbors : list[int]
+        A list of the ids of other vertices on the same level in the tree as this vertex, such that
+        there is a nontrivial probability of a transition occuring from one of the children of this
+        vertex to one of the children of the other vertices, in tau steps.
+    parent : int
+        The id of the parent of this vertex in the tree.
+    T : np.ndarray of shape (n+len(neighbors),n+len(neighbors))
+        The transition probability matrix of this MSM, representing transitions between vertices
+        of the MSM (the children of this vertex in the tree) and from vertices of the MSM to
+        neighboring MSMs (vertices on the same level as this one in the tree)
+    timescale : float
+        The timescale associated with the slowest process described by this MSM.
+    is_root : bool
+        True iff this vertex is the root of the tree.
     """
 
     SPLIT = "SPLIT"
@@ -20,33 +82,6 @@ class HierarchicalMSMVertex:
     SUCCESS = "SUCCESS"
 
     def __init__(self, tree, children, parent, tau, height, config):
-        """__init__.
-
-        Parameters
-        ----------
-        tree : HierarchicalMSMTree
-            The tree this vertex is part of
-        children : set
-            A set of indices of this vertices children
-        parent : int
-            the id of the parent vertex to this vertex.
-            Note that the root of an HierarchicalMSMTree, is its own parent
-        tau : int
-            the timestep resolution of this MSM, in multiples of the timestep resolution of
-            discrete trajectories given as input to the HierarchicalMSMTree in
-            update_transition_counts.
-
-            For example, if a Molecular Dynamics simulation is sampled in timesteps of 2e-15 seconds,
-            resulting in (x_0, x_1, ..., x_n), and then one every tenth sample is taken (x_0, x_10,...)
-            and discretized into microstates, resulting in (microstate_0, microstate_10, ...) and
-            this trajectory is used as input to HierarchicalMSMTree, the timestep resolution of this
-            discrete trajectory is 10*2e-15=2e-14 seconds. Now if this MSM has tau=5, then the
-            timestep resolution of this MSM is 5*2e-14=1e-13 seconds.
-        height : int
-            the height of this vertex in the tree, where microstates have height 0.
-        config : dict
-            a dictionary of model parameters.
-        """
         self.__id = util.get_unique_id()
         self.tree = tree
         self._children = set(children)
@@ -138,7 +173,6 @@ class HierarchicalMSMVertex:
     def update(self):
         return self._update_T()
 
-
     def _check_parent_update_condition(self):
         if self.is_root:
             return False
@@ -152,6 +186,22 @@ class HierarchicalMSMVertex:
         return max_change_factor >= self.parent_update_threshold
 
     def _update_T(self):
+        """
+        Update the transition matrix of this vertex, and all the quantities associated with it;
+
+        Returns:
+        --------
+        result : {"DISOWN_CHILDREN", "SPLIT", "UPDATE_PARENT", "SUCCESS"}
+            If not "SUCCESS", the value of this indicates that some action needs to be taken by the
+            tree.
+        update : depends on the value of result
+            If result is "DISOWN_CHILDREN", this will be a dictionary mapping parents to sets of
+            children, such that each set of children should be moved to its parent.
+            If result is "SPLIT", this is will be (partition, taus, self, self.parent), where
+            partition is a partition of this vertices children, and taus is the tau of the new
+            vertices for each subset in the partition.
+            If result is "UPDATE_PARENT" or "SUCCESS" this will be None.
+        """
         assert self.n > 0
         T_rows = dict()
         column_ids = set(self.children)
@@ -247,9 +297,9 @@ class HierarchicalMSMVertex:
 
     def _get_most_likely_parents_MC(self, child):
         parent_sample = []
-        for i in range(100):
+        for _ in range(100):
             step = child
-            for j in range(self.tau):
+            for __ in range(self.tau):
                 next_states, transition_probabilities = self.tree.get_external_T(step)
                 step = np.random.choice(next_states, p=transition_probabilities)
             parent_sample.append(self.tree.get_parent(step))
@@ -278,29 +328,29 @@ class HierarchicalMSMVertex:
         T = linalg.normalize_rows(T)
         return stationary_distribution(T)
 
-    def get_external_T(self, ext_tau=1) -> tuple:
+    def get_external_T(self, tau=1) -> tuple:
         """get_external_T.
+        Get the transition probabilities between this vertex and its neighbors on the same level
+        of the tree.
 
         Parameters
         ----------
-        self :
-            self
-        ext_tau :
-            The timestep resolution of the transition probabilities (see return value)
-
+        tau : int
+            the time-resolution of the transition probabilities
         Returns
         -------
-        (ids, external_T) ids and external_T are both arrays, such that external_T[i] is the
-        probability of a transition from this vertex to the vertex with id ids[i] in tau steps.
+        ids : ndarray
+            An array of the ids of the neighbors of this vertex
+        transition_probabilities : ndarray
+            An array of the transition probabilities to the neighbors of this vertex, such that
+            transition_probabilities[i] is the probability of getting to ids[i] in tau steps from
+            this vertex.
         """
-        # returns: ext_T: an (m,2) array, such that if ext_T[j] = v,p, then p is the probability
-        # of a transition from this vertex to the vertex v.
-
         ids, external_T = self._external_T
         ids = ids.copy()
         external_T = external_T.copy()
-        if ext_tau != 1:
-            external_T[0] = np.power(external_T[0], ext_tau) # The probability of no transition
+        if tau != 1:
+            external_T[0] = np.power(external_T[0], tau) # The probability of no transition
             # The relative probabilities of the other transitions haven't changed, so normalize:
             external_T[1:] = (external_T[1:]/np.sum(external_T[:,1])) * (1-external_T[0])
 
@@ -328,7 +378,7 @@ class HierarchicalMSMVertex:
             ids[j] = self.index_2_id[n+j-1]
 
         self._external_T = ids, external_T
-        self._neighbors = ids[1:]
+        self._neighbors = ids
 
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
         # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,
@@ -350,7 +400,7 @@ class HierarchicalMSMVertex:
                             find a partition", RuntimeWarning)
         id_partition = [ [self.index_2_id[index] for index in subset] \
                             for subset in index_partition]
-        
+
         return id_partition, taus, self, self.parent
 
     def sample_microstate(self, n_samples):

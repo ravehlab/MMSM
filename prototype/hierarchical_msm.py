@@ -1,5 +1,8 @@
+"""Hierarchical Markov State Model"""
+
+# Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
+
 import warnings
-import time
 import numpy as np
 from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
 from HMSM.prototype.hmsm_config import get_default_config
@@ -8,16 +11,16 @@ from HMSM.util import util
 class HierarchicalMSM:
     """HierarchicalMSM.
     This class is used to build and manage a hierarchical MSM over some energy landscape, as will
-    be described in Clein et al. 2021. It relies on the provided sampler to explore microstates, 
+    be described in Clein et al. 2021. It relies on the provided sampler to explore microstates,
     that are stored at the vertices of lowest (highest-resolution) level in the MSM. It then creates
-    a hierarchical (multiscale) map of the states in the configuration space, and stores it in a 
+    a hierarchical (multiscale) map of the states in the configuration space, and stores it in a
     HierarchicalMSMTree data structure.
 
     Parameters
     ----------
     sampler: DiscreteSampler
         A wrapper for some process that samples a sequences of microstates from a Markov-chain
-        over a discrete set of states and a discrete time step. 
+        over a discrete set of states and a discrete time step.
     start_points: Iterable
         A set of points from which to initiate the HierarchicalMSM at the highest-resolution level.
 
@@ -64,37 +67,38 @@ class HierarchicalMSM:
     >>> tree = hmsm.expand(max_cputime=60)
 
     Now we can do some analysis, visualizations, etc, on the tree:
-    
+
     TODO: provide example
 
     Continue sampling until the timescale of the longest process described by the HMSM is at least
     1 second:
 
     >>> hmsm.expand(min_timescale_sec=1)         # tree points to the HierarchicalMSMs tree data
-    >>> timescale = tree.get_longest_timescale() # structure, so it was updated by hmsm.expand 
+    >>> timescale = tree.get_longest_timescale() # structure, so it was updated by hmsm.expand
     >>> timescale_in_seconds = timescale * hmsm.timestep_in_seconds
-    >>> print(f"The timescale of the slowest process described by this HMSM is {timescale_in_seconds:.1f} seconds")
+    >>> print(f"The timescale of the slowest process described by this HMSM is \
+                {timescale_in_seconds:.1f} seconds")
     The timescale of the slowest process described by this HMSM is 1.2 seconds
     """
 
 
     def __init__(self, sampler, start_points, **config_kwargs):
-        self.sampler = sampler
+        self._sampler = sampler
         self.config = get_default_config()
         self.config.update(config_kwargs)
-        self.hmsm_tree = HierarchicalMSMTree(self.config)
-        self.n_samples = 0
-        self._effective_timestep_seconds = self.sampler.dt * self.config["base_tau"]
+        self._hmsm_tree = HierarchicalMSMTree(self.config)
+        self._n_samples = 0
+        self._effective_timestep_seconds = self._sampler.dt * self.config["base_tau"]
         self._init_sample(start_points)
-        
+
 
     def _init_sample(self, start_points):
-        dtrajs = self.sampler.get_initial_sample(start_points,\
+        dtrajs = self._sampler.get_initial_sample(start_points,\
                                                  self.config["n_samples"],\
                                                  self.config["sample_len"],\
                                                  self.config["base_tau"])
-        self.hmsm_tree.update_model_from_trajectories(dtrajs)
-        self.n_samples += self.batch_size
+        self._hmsm_tree.update_model_from_trajectories(dtrajs)
+        self._n_samples += self.batch_size
 
 
     @property
@@ -105,8 +109,12 @@ class HierarchicalMSM:
     def timestep_in_seconds(self):
         return self._effective_timestep_seconds
 
-    # TODO: (long term, not now) - add expand by confidence interval, maybe there should be an expand vs. exploit mode, or jsut
-    #        according to parametersw
+    @property
+    def tree(self):
+        return self._hmsm_tree
+
+    # TODO: (long term, not now) - add expand by confidence interval, maybe there should be an
+    # expand vs. exploit mode, or jsut according to parameters
     def expand(self, max_cputime=np.inf, max_samples=np.inf, min_timescale_sec=np.inf):
         """
         Estimate an HMSM by sampling from the sampler.
@@ -115,7 +123,7 @@ class HierarchicalMSM:
         ----------
         max_cputime : int or float
             Maximum cpu time to run in seconds.
-        max_samples : int 
+        max_samples : int
             Maximum number of samples to use.
         min_timescale_sec :
             Minimum timescale of the full HMSM, after which to stop sampling.
@@ -133,16 +141,16 @@ class HierarchicalMSM:
         batch_size = self.batch_size
 
         while not stop_condition(n_samples=n_samples, timescale=timescale):
-            microstates = self.hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
+            microstates = self._hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
             self._batch_sample_and_expand(microstates)
             n_samples += batch_size
-            self.n_samples += batch_size
-            timescale = self.hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
-            print(f"Samples used: {self.n_samples}, timescale: {timescale}")
+            self._n_samples += batch_size
+            timescale = self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
+            print(f"Samples used: {self._n_samples}, timescale: {timescale}")
 
     def _batch_sample_and_expand(self, microstates):
-        dtrajs = self.sampler.sample_from_microstates(microstates,\
+        dtrajs = self._sampler.sample_from_microstates(microstates,\
                                                       self.config["n_samples"],\
                                                       self.config["sample_len"],
                                                       self.config["base_tau"])
-        self.hmsm_tree.update_model_from_trajectories(dtrajs)
+        self._hmsm_tree.update_model_from_trajectories(dtrajs)
