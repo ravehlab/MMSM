@@ -1,9 +1,14 @@
+"""BrownianDynamicsSampler"""
+
+# Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
+
 import numpy as np
 from HMSM.prototype.coarse_grain import KCentersCoarseGrain
 
 __all__ = ["BrownianDynamicsSampler"]
 
 class BrownianDynamicsSampler:
+    #TODO: documentation
 
     def __init__(self, force, dim, dt, kT, coarse_grain_type=KCentersCoarseGrain, **coarse_grain_args):
         self.force = force

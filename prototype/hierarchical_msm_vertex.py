@@ -282,6 +282,10 @@ class HierarchicalMSMVertex:
         return id_2_index, index_2_id, full_n
 
     def _check_disown(self, id_2_index, n_external):
+        """
+        Check if there are vertices among self.children that should be one of my neighbors children
+        instead. If there are, return a dict mapping new parents to the children to move to them.
+        """
         vertices_to_disown = defaultdict(list)
         for child in self.children:
             row = id_2_index[child]
@@ -296,6 +300,10 @@ class HierarchicalMSMVertex:
         return False
 
     def _get_most_likely_parents_MC(self, child):
+        """
+        Sample 100 steps of length self.tau, starting from child, and return the most likely
+        parents of a vertex 1 tau-step away from child.
+        """
         parent_sample = []
         for _ in range(100):
             step = child
@@ -379,7 +387,6 @@ class HierarchicalMSMVertex:
 
         self._external_T = ids, external_T
         self._neighbors = ids
-
         #NOTE: the assumption underlying the whole concept, is that full_transition_probabilities[n:]
         # is similar to T_ext_tau[i, n:] for all i<n. In other words, that a with high probability,
         # a random walk mixes before leaving this MSM.
@@ -423,6 +430,14 @@ class HierarchicalMSMVertex:
         return recursive_sample
 
     def get_all_microstates(self):
+        """get_all_microstates.
+
+        Returns
+        -------
+        microstates : set
+            A set of all the ids of the microstates at the leaves of the subtree of which this 
+            vertex is the root.
+        """
         if self.height == 1:
             return self.children
         microstates = set()

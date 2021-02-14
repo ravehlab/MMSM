@@ -1,8 +1,13 @@
+"""A collection of utility functions used by HierarchicalMSM, and related classes"""
+
+# Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
+
 import time
 import sys
 from collections import defaultdict
 from uuid import uuid4
 import numpy as np
+from HMSM.util import clustering
 
 def count_dict(depth=1) -> defaultdict:
     """
@@ -152,3 +157,85 @@ def get_threshold_check_function(greater_than : dict={}, less_than : dict={}, ma
                 return time.time() > start_time + max_time
         return False
     return _check_function
+
+
+### Default functions for HierarchicalMSM config dictionary. ###
+def two_fold_gibbs_split(hmsm):
+    """Get a partition of a vertex, assuming the parent's time resolution tau is twice that of
+    this vertex.
+    """
+    n = hmsm.n
+    T = hmsm.T[:n, :n]
+    tau = hmsm.tau
+    max_k = int(np.sqrt(hmsm.n))
+    partition = clustering.gibbs_metastable_clustering(T, 2*tau, max_k)
+    taus = [tau]*len(partition)
+    return partition, taus
+
+def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
+    """Get a function which checks if a vertices size or timescale are larger than some constant,
+    provided as arguments to this function.
+    """
+    def _split_condition(hmsm):
+        return hmsm.timescale/hmsm.tau > max_timescale or hmsm.n > max_size
+    return _split_condition
+
+def uniform_sample(hmsm):
+    """Samples one of this vertices children uniformly.
+    """
+    uniformly_chosen_child = np.random.choice(hmsm.n)
+    return hmsm.children[uniformly_chosen_child]
+
+def get_default_config(**kwargs):
+    """get_default_config.
+    Get a config dictionary for HierarchicalMSM, with default values for all those not given as
+    arguments.
+
+    Parameters
+    ----------
+    **config_kwargs: optional
+        Any parameters for the model. Here is a list of parameters used by the model:
+
+        n_microstates: int
+            How many microstates to sample from in a single batch of samples
+        n_samples: int
+            How many samples to take from each microstate in a single batch of samples
+        sample_len: int
+            The length of each sample in a single batch of samples
+        base_tau: int
+            The number of sampler timesteps to skip between each sample used to estimate the HMSM.
+            For example if base_tau is 5, and the sampler creates a trajectory (x0, ..., x15), then
+            the sub-sampled trajectory (x0, x5, x10, x15) will be used to estimate transition rates
+            of the HMSM.
+        split_condition: callable
+            A function that takes an HierarchicalMSMVertex and returns True if this vertex should
+            split into two or more vertices
+        split_method: callable
+            A function that takes an HierarchicalMSMVertex v, and returns a tuple
+            (partition, taus), where partition is a partition of the vertices of v, and taus is
+            a list of the tau of the MSMs representing the partition parts respectively.
+        sample_method: callable
+            A function that takes an HierarchicalMSMVertex, and returns the id of one of its
+            children in the tree.
+        parent_update_threshold: float
+            The minimum fraction of a change in a transition probability between vertices that will
+            trigger the parent of the vertices to update its transition matrix.
+
+    Returns
+    -------
+    config : dict
+        Dictionary of of model parameters.
+    """
+    config = {
+              "n_microstates" : 20,
+              "n_samples" : 5,
+              "sample_len" : 5,
+              "base_tau" : 2,
+              "split_condition" : get_size_or_timescale_split_condition(),
+              "split_method" : two_fold_gibbs_split,
+              "sample_method" : uniform_sample,
+              "parent_update_threshold" : 0.1,
+              "alpha" : 1
+             }
+    config.update(kwargs)
+    return config

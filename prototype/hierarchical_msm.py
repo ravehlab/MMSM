@@ -5,7 +5,6 @@
 import warnings
 import numpy as np
 from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
-from HMSM.prototype.hmsm_config import get_default_config
 from HMSM.util import util
 
 class HierarchicalMSM:
@@ -84,7 +83,7 @@ class HierarchicalMSM:
 
     def __init__(self, sampler, start_points, **config_kwargs):
         self._sampler = sampler
-        self.config = get_default_config()
+        self.config = util.get_default_config()
         self.config.update(config_kwargs)
         self._hmsm_tree = HierarchicalMSMTree(self.config)
         self._n_samples = 0
