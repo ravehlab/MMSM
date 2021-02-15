@@ -18,6 +18,10 @@ class KCentersCoarseGrain:
         The maximum radius of a single cluster
     representative_sample_size : int, optional
         The maximum number of representatives to keep from each cluster
+
+    Examples
+    --------
+    TODO
     """
 
     def __init__(self, cutoff, representative_sample_size=10):

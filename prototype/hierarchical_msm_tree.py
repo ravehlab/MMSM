@@ -225,6 +225,47 @@ class HierarchicalMSMTree:
             self._update_vertex(vertex)
         self._do_all_updates_by_height()
 
+    def get_full_T(self):
+        """get_full_T.
+        Get the full transition matrix between all microstates.
+
+        Returns
+        -------
+        T : np.ndarray of shape (n,n), where n is the number of microstates in the tree
+            Transition probability matrix, in timestep of config["base_tau"]
+        id_2_index : dict
+            Dictionary mapping microstate ids to their indices in T
+        """
+        n = len(self._microstate_parents)
+        T = np.zeros((n,n))
+        id_2_index = dict()
+        for i, microstate_id in enumerate(self._microstate_parents.keys()):
+            id_2_index[microstate_id] = i
+        for src, (ids, row) in self._microstate_MMSE.items():
+            i = id_2_index[src]
+            for id, transition_probability in zip(ids, row):
+                assert transition_probability >= 0
+                j = id_2_index[id]
+                T[i,j] = transition_probability
+        return T, id_2_index
+
+    def get_T_for_level(self, level:int):
+        assert 0< level < self.height
+        vertices = []
+        id_2_index = dict()
+        for vertex in self.vertices.values():
+            if vertex.height != level:
+                continue
+            id_2_index[vertex.id] = len(vertices)
+            vertices.append(vertex)
+        n = len(vertices)
+        T = np.zeros((n,n))
+        for i, vertex in enumerate(vertices):
+            ids, row = vertex.get_external_T()
+            for neighbor, transition_probability in zip(ids, row):
+                j = id_2_index[neighbor]
+                T[i,j] = transition_probability
+        return T, id_2_index
 
     def _dirichlet_MMSE(self, vertex_id):
         """
