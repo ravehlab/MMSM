@@ -112,6 +112,9 @@ class HierarchicalMSM:
     def tree(self):
         return self._hmsm_tree
 
+    def get_timescale(self):
+        return self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
+
     # TODO: (long term, not now) - add expand by confidence interval, maybe there should be an
     # expand vs. exploit mode, or jsut according to parameters
     def expand(self, max_cputime=np.inf, max_samples=np.inf, min_timescale_sec=np.inf):

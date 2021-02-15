@@ -217,6 +217,15 @@ class HierarchicalMSMTree:
                 self._update_vertex(parent_id)
         self._do_all_updates_by_height()
 
+    def force_update_all(self):
+        """force_update_all.
+        Update all vertices in the tree, regardless of the last time they were updated.
+        """
+        for vertex in self.vertices:
+            self._update_vertex(vertex)
+        self._do_all_updates_by_height()
+
+
     def _dirichlet_MMSE(self, vertex_id):
         """
         Get the equivalent of external_T, but for a microstate.

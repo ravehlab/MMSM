@@ -46,7 +46,7 @@ class BrownianDynamicsSampler:
 
     def sample_from_point(self, point, sample_len, tau):
         x = point.copy()
-        traj = []
+        traj = [x]
         for j in range(sample_len-1):
             for i in range(tau):
                 x = self._BD_step(x)
