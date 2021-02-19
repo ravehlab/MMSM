@@ -4,7 +4,7 @@
 
 from collections import defaultdict
 import numpy as np
-from HMSM.util import util, UniquePriorityQueue
+from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.prototype.hierarchical_msm_vertex import HierarchicalMSMVertex
 
 
@@ -45,6 +45,7 @@ class HierarchicalMSMTree:
         self._last_update_sent = dict()
         self.config = config
         self._update_queue = UniquePriorityQueue()
+        self._levels = defaultdict(list)
         self.vertices = dict()
         self._init_root()
 
@@ -90,6 +91,10 @@ class HierarchicalMSMTree:
         """Length of the longest path from the root of the tree to another vertex.
         """
         return self.vertices[self.root].height
+
+    def get_level(self, level):
+        assert level <= self.height
+        return self._levels[level].copy()
 
     def get_parent(self, child_id):
         """
@@ -138,6 +143,12 @@ class HierarchicalMSMTree:
             self._last_update_sent[vertex_id] = [ids, ext_T]
             return ids, ext_T
         return self.vertices[vertex_id].get_external_T(tau)
+
+    def get_n_samples(self, vertex):
+        if self._is_microstate(vertex):
+            return max(1,np.sum([counts for counts in self._microstate_counts[vertex].values()]))
+        return self.vertices[vertex].n_samples
+
 
     def get_microstates(self, vertex=None):
         """get_microstates.
@@ -249,24 +260,6 @@ class HierarchicalMSMTree:
                 T[i,j] = transition_probability
         return T, id_2_index
 
-    def get_T_for_level(self, level:int):
-        assert 0< level < self.height
-        vertices = []
-        id_2_index = dict()
-        for vertex in self.vertices.values():
-            if vertex.height != level:
-                continue
-            id_2_index[vertex.id] = len(vertices)
-            vertices.append(vertex)
-        n = len(vertices)
-        T = np.zeros((n,n))
-        for i, vertex in enumerate(vertices):
-            ids, row = vertex.get_external_T()
-            for neighbor, transition_probability in zip(ids, row):
-                j = id_2_index[neighbor]
-                T[i,j] = transition_probability
-        return T, id_2_index
-
     def _dirichlet_MMSE(self, vertex_id):
         """
         Get the equivalent of external_T, but for a microstate.
@@ -322,10 +315,12 @@ class HierarchicalMSMTree:
             self._remove_vertex(split_vertex.id)
         else:
             # the root is going up a level, so its children will be the new vertices
+            self._levels[self.height].remove(self.root)
             split_vertex.remove_children(split_vertex.children)
             self.vertices[parent].add_children(new_vertices)
             split_vertex.height += 1
             split_vertex.tau *= 2 #TODO: this should be dependent on the partition
+            self._add_vertex(split_vertex)
         self._update_vertex(parent)
 
 
@@ -394,14 +389,18 @@ class HierarchicalMSMTree:
         assert isinstance(vertex, HierarchicalMSMVertex)
         assert vertex.tree is self
         self.vertices[vertex.id] = vertex
+        self._levels[vertex.height].append(vertex.id)
 
     def _remove_vertex(self, vertex):
         parent = self.get_parent(vertex)
+        height = self.vertices[vertex].height
+        self._levels[height].remove(vertex)
         del self.vertices[vertex]
         self.vertices[parent].remove_children([vertex])
         # update the parent and neighbors of the removed vertex
-        for other_vertex in self.vertices.values(): #TODO check by level
-            if hasattr(other_vertex, '_external_T'):
+        for other_vertex_id in self.get_level(height):
+            other_vertex = self.vertices[other_vertex_id]
+            if hasattr(other_vertex, '_external_T'): #TODO use neighbor
                 if vertex in other_vertex._external_T[0]:
                     self._update_vertex(other_vertex.id)
             if vertex in other_vertex.neighbors:
@@ -416,6 +415,63 @@ class HierarchicalMSMTree:
         assert vertex not in self._microstate_parents.values()
         for v in self.vertices.values():
             assert v.parent is not vertex
+
+    def get_ancestor(self, vertex, level):
+        """get_ancestor.
+        Get the direct ancestor of a vertex in the tree, on a specified level.
+
+        Parameters
+        ----------
+        vertex : 
+            vertex
+        level :
+            level
+
+        Returns
+        -------
+        parent : int
+            The ancestor of vertex with height level in the tree.
+        """
+        parent = vertex
+        while self.vertices[parent].height < level:
+            parent = self.vertices[parent].parent
+        return parent
+
+    def get_level_T(self, level, tau):
+        level = self.get_level(level)
+        n = len(level)
+        id_2_index = dict(zip(level, range(n)))
+        T = np.zeros((n,n))
+        for vertex in level:
+            i = id_2_index[vertex]
+            ids, transition_probabilities = self.get_external_T(vertex)
+            for neighbor, transition_probability in zip(ids, transition_probabilities):
+                j = id_2_index[neighbor]
+                T[i,j] = transition_probability
+        linalg._assert_stochastic(T)
+        return np.linalg.matrix_power(T, tau)
+
+    def sample_from_stationary(self, vertex, level):
+        """sample_from_stationary.
+        Sample on of the descendents of vertex, from the stationary distribution of the vertex.
+
+        Parameters
+        ----------
+        vertex : int
+           id of the vertex from which a sample will be taken
+        level : int
+            the level of the tree from which to sample
+
+        Returns
+        -------
+        sample : int
+            the id of the sampled vertex
+        """
+        sample = vertex
+        while self.vertices[sample].height > level:
+            sample = self.vertices[sample].sample_from_stationary()
+        return sample
+
 
     def sample_random_walk(self, sample_length, start=None):
         """
@@ -442,8 +498,39 @@ class HierarchicalMSMTree:
             sample[i] = current
         return sample
 
-    def _random_step(self, microstate_id):
-        next_states, transition_probabilities = self._microstate_MMSE[microstate_id]
+        #TODO Give this a more informative name, maybe sample_random_walk can do the same thing.
+    def sample_trajectory(self, start, length, n, level):
+        """sample_trajectory.
+        Sample n trajectories of vertices, of length length, on level level, starting from a vertex
+        chosen from the stationary distribution of the vertex start
+        #TODO better documentation
+
+        Parameters
+        ----------
+        self :
+            self
+        start :
+            start
+        length :
+            length
+        n :
+            n
+        level :
+            level
+        """
+        #TODO use T from get_level_T
+        trajs = []
+        for _ in range(n):
+            step = self.sample_from_stationary(start, level)
+            traj = np.ndarray(length, dtype=int)
+            for i in range(length):
+                step = self._random_step(step)
+                traj[i] = step
+            trajs.append(traj)
+        return trajs
+
+    def _random_step(self, vertex_id):
+        next_states, transition_probabilities = self.get_external_T(vertex_id)
         return np.random.choice(next_states, p=transition_probabilities)
 
     def sample_microstate(self, n_samples, vertex_id=None):
