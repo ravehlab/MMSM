@@ -171,6 +171,7 @@ class HierarchicalMSMVertex:
         self._T_is_updated = False
 
     def update(self):
+        self.n_samples = np.sum([self.tree.get_n_samples(child) for child in self.children])
         return self._update_T()
 
     def _check_parent_update_condition(self):
@@ -289,7 +290,7 @@ class HierarchicalMSMVertex:
         vertices_to_disown = defaultdict(list)
         for child in self.children:
             row = id_2_index[child]
-            most_likely_parent = self._get_most_likely_parent(self._T[row], n_external)
+            most_likely_parent = self._get_most_likely_parent(row, n_external)
             if most_likely_parent != self.id:
                 # Double check, otherwise we get into loops of children being passed back and forth
                 if self.id not in self._get_most_likely_parents_MC(child):
@@ -305,12 +306,12 @@ class HierarchicalMSMVertex:
         parents of a vertex 1 tau-step away from child.
         """
         parent_sample = []
-        for _ in range(100):
+        for _ in range(31): # maybe this number should depend on number of neighbors?
             step = child
             for __ in range(self.tau):
                 next_states, transition_probabilities = self.tree.get_external_T(step)
                 step = np.random.choice(next_states, p=transition_probabilities)
-            parent_sample.append(self.tree.get_parent(step))
+                parent_sample.append(self.tree.get_parent(step))
         parents, counts = np.unique(parent_sample, return_counts=True)
         return parents[np.where(counts==max(counts))]
 
@@ -318,8 +319,8 @@ class HierarchicalMSMVertex:
 
     def _get_most_likely_parent(self, row, n_external):
         temp_row = np.ndarray(1+n_external)
-        temp_row[0] = np.sum(row[:self.n])
-        temp_row[1:] = row[self.n:]
+        temp_row[0] = np.sum(self._T[row, :self.n]) - self._T[row, row]
+        temp_row[1:] = self._T[row, self.n:]
         maximum = np.argmax(temp_row)
         if maximum > 0:
             # argmax returns the highest maximal index, if it's the same as 0, we want to keep it
@@ -428,6 +429,9 @@ class HierarchicalMSMVertex:
         for i, vertex in enumerate(vertices):
             recursive_sample += self.tree.sample_microstate(counts[i], vertex)
         return recursive_sample
+
+    def sample_from_stationary(self):
+        return np.random.choice(self.children, p=self.get_local_stationary_distribution())
 
     def get_all_microstates(self):
         """get_all_microstates.

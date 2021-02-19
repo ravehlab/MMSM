@@ -186,6 +186,18 @@ def uniform_sample(hmsm):
     uniformly_chosen_child = np.random.choice(hmsm.n)
     return hmsm.children[uniformly_chosen_child]
 
+def uncertainty_minimization(hmsm):
+    children = hmsm.children
+    eps = 1e-12
+    p = np.ndarray(hmsm.n)
+    for i, child in enumerate(children):
+        p[i] = max(np.exp(-hmsm.tree.get_n_samples(child)/2), eps)
+    p = p/np.sum(p)
+    p = np.nan_to_num(p)
+    return np.random.choice(children, p=p)
+
+
+
 def get_default_config(**kwargs):
     """get_default_config.
     Get a config dictionary for HierarchicalMSM, with default values for all those not given as
@@ -233,7 +245,7 @@ def get_default_config(**kwargs):
               "base_tau" : 2,
               "split_condition" : get_size_or_timescale_split_condition(),
               "split_method" : two_fold_gibbs_split,
-              "sample_method" : uniform_sample,
+              "sample_method" : uncertainty_minimization,
               "parent_update_threshold" : 0.1,
               "alpha" : 1
              }
