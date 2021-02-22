@@ -469,7 +469,7 @@ class HierarchicalMSMTree:
             parent = self.vertices[parent].parent
         return parent
 
-    def get_level_T(self, level, tau):
+    def get_level_T(self, level, tau, parent_order=None, return_order=False):
         """get_level_T.
         Get the transition matrix between vertices on a single level, in a given lag time.
 
@@ -486,6 +486,15 @@ class HierarchicalMSMTree:
             Transition matrix.
         """
         level = self.get_level(level)
+
+        if parent_order is not None: # sort the level by a given ordering over their parents
+            level_by_parents = []
+            for parent in parent_order:
+                for child in level:
+                    if self.get_parent(child) == parent:
+                        level_by_parents.append(child)
+            level = level_by_parents
+
         n = len(level)
         id_2_index = dict(zip(level, range(n)))
         T = np.zeros((n,n))
@@ -496,6 +505,8 @@ class HierarchicalMSMTree:
                 j = id_2_index[neighbor]
                 T[i,j] = transition_probability
         linalg._assert_stochastic(T)
+        if return_order:
+            return np.linalg.matrix_power(T, tau), level
         return np.linalg.matrix_power(T, tau)
 
     def sample_from_stationary(self, vertex, level):
