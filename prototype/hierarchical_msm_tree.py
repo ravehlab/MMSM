@@ -6,6 +6,7 @@ from collections import defaultdict
 import numpy as np
 from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.prototype.hierarchical_msm_vertex import HierarchicalMSMVertex
+from msmtools.analysis.dense.stationary_vector import stationary_distribution
 
 
 class HierarchicalMSMTree:
@@ -236,6 +237,20 @@ class HierarchicalMSMTree:
             self._update_vertex(vertex)
         self._do_all_updates_by_height()
 
+    def force_rebuild_tree(self):
+        """force_rebuild_tree.
+        Remove all existing vertices, and rebuild entire tree, keeping only microstates and all
+        observed transitions between them.
+        """
+        del self._levels
+        del self.vertices
+        self._levels = defaultdict(list)
+        self.vertices = dict()
+        self._init_root()
+        self._connect_to_new_parent(self._microstate_parents.keys(), self.root)
+        self.force_update_all()
+
+
     def get_full_T(self):
         """get_full_T.
         Get the full transition matrix between all microstates.
@@ -259,6 +274,23 @@ class HierarchicalMSMTree:
                 j = id_2_index[id]
                 T[i,j] = transition_probability
         return T, id_2_index
+
+    def full_stationary_distribution(self):
+        """full_stationary_distribution.
+        Get the stationary distribution over all microstates.
+
+        Returns
+        -------
+        pi : dict
+            A dictionary mapping microstate ids to their stationary distribution.
+        """
+        T, id_2_index = self.get_full_T()
+        st = stationary_distribution(T)
+        pi = {}
+        for id, index in id_2_index.items():
+            pi[id] = st[index]
+        return pi
+
 
     def _dirichlet_MMSE(self, vertex_id):
         """
@@ -438,6 +470,21 @@ class HierarchicalMSMTree:
         return parent
 
     def get_level_T(self, level, tau):
+        """get_level_T.
+        Get the transition matrix between vertices on a single level, in a given lag time.
+
+        Parameters
+        ----------
+        level : int
+            level
+        tau : int
+            tau
+
+        Returns
+        -------
+        T : ndarray
+            Transition matrix.
+        """
         level = self.get_level(level)
         n = len(level)
         id_2_index = dict(zip(level, range(n)))

@@ -29,6 +29,7 @@ class KCentersCoarseGrain:
         self._nearest_neighbors = None
         self._k_centers_initiated = False
         self._cluster_inx_2_id = dict()
+        self._id_2_cluster_inx = dict()
 
         self._representative_sample_size = representative_sample_size
         self._representatives = dict()
@@ -42,8 +43,11 @@ class KCentersCoarseGrain:
 
     @property
     def centers(self):
-        return self._centers.copy()
+        return np.array(self._centers)
 
+    def get_centers_by_ids(self, ids):
+        indices = np.array([self._id_2_cluster_inx[id] for id in ids], dtype=int)
+        return self.centers[indices]
 
     def get_coarse_grained_clusters(self, data : np.ndarray):
         """Get the cluster ids of data points.
@@ -111,7 +115,9 @@ class KCentersCoarseGrain:
         for cluster in new_clusters:
             if self._cluster_inx_2_id.get(cluster):
                 continue
-            self._cluster_inx_2_id[cluster] = util.get_unique_id()
+            uid = util.get_unique_id()
+            self._cluster_inx_2_id[cluster] = uid
+            self._id_2_cluster_inx[uid] = cluster
 
     def _sample_representatives(self, clusters, data):
         """

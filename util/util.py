@@ -167,7 +167,7 @@ def two_fold_gibbs_split(hmsm):
     n = hmsm.n
     T = hmsm.T[:n, :n]
     tau = hmsm.tau
-    max_k = int(np.sqrt(hmsm.n))
+    max_k = min(2*int(np.sqrt(hmsm.n)), n-1)
     partition = clustering.gibbs_metastable_clustering(T, 2*tau, max_k)
     taus = [tau]*len(partition)
     return partition, taus

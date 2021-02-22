@@ -52,3 +52,10 @@ def integrate_2d(force, xlim, ylim, resolution):
     Ix_by_first_row= np.tile(Ix[0,:], (Ix.shape[0],1))
     I= (Ix_by_first_row + Iy)
     return X, Y, I
+
+def plot_distribution(cg, p, ax=None, **kwargs):
+    x = cg.get_centers_by_ids(p.keys())
+    c = np.log(list(p.values()))
+    if ax is None:
+        ax = plt.gca()
+    return ax.scatter(*x.T, c=c, **kwargs)

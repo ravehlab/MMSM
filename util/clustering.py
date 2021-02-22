@@ -131,7 +131,7 @@ def spectral(P, k, eig=None, return_eig=False):
 
     e_vals = np.real(e_vals)
     e_vecs = np.real(e_vecs)
-    k_smallest = np.argpartition(e_vals, k)[:k]
+    k_smallest = np.argpartition(e_vals, min(k, len(e_vals)-1))[:k]
     projection = e_vecs[:,k_smallest]
     projection = normalize_rows(projection, norm=2)
     clusters = KMeans(n_clusters=k).fit_predict(projection)
