@@ -53,6 +53,17 @@ def integrate_2d(force, xlim, ylim, resolution):
     I= (Ix_by_first_row + Iy)
     return X, Y, I
 
+def map_2d(free_energy, xlim, ylim, resolution):
+    x = np.arange(xlim[0], xlim[1], resolution)
+    y = np.arange(ylim[0], ylim[1], resolution)
+    X, Y = np.meshgrid(x,y)
+    coords = np.stack([X,Y], axis=2)
+    Z = np.ndarray(X.shape)
+    for i,j in np.ndindex(X.shape):
+        Z[i, j] = free_energy(coords[i, j])
+    return X, Y, Z
+
+
 def plot_distribution(cg, p, ax=None, **kwargs):
     x = cg.get_centers_by_ids(p.keys())
     c = np.log(list(p.values()))
