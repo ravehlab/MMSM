@@ -167,7 +167,8 @@ def two_fold_gibbs_split(hmsm):
     n = hmsm.n
     T = hmsm.T[:n, :n]
     tau = hmsm.tau
-    max_k = min(2*int(np.sqrt(hmsm.n)), n-1)
+    #TODO max_k should depend on number of eigenvalues with timescale greater than 2*Tau
+    max_k = min(2*int(np.sqrt(hmsm.n)), n-1) 
     partition = clustering.gibbs_metastable_clustering(T, 2*tau, max_k)
     taus = [tau]*len(partition)
     return partition, taus
@@ -177,6 +178,7 @@ def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
     provided as arguments to this function.
     """
     def _split_condition(hmsm):
+        #TODO max_timescale should depend on parents timescale
         return hmsm.timescale/hmsm.tau > max_timescale or hmsm.n > max_size
     return _split_condition
 
