@@ -182,6 +182,10 @@ def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True):
         for vertex in range(n):
             # now choose a coloring from the distribution defined above for the next iteration
             if maximum_likelihood:
+                if np.max(next_step[vertex]) < 0.8: #TODO this should be a parameter
+                    # make no change to this vertex
+                    clusters[it+1][vertex] = clusters[it][vertex]
+                    continue
                 color = np.argmax(next_step[vertex])
             else:
                 color = np.random.choice(k, p=next_step[vertex])
