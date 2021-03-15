@@ -27,11 +27,11 @@ class HierarchicalMSMVertex:
         the id of the parent vertex to this vertex.
         Note that the root of an HierarchicalMSMTree, is its own parent
     tau : int
-        the timestep resolution of this MSM, in multiples of the timestep resolution of
+        the timestep resolution of this MSM, in multiples of basic timesteps - the timesteps of
         discrete trajectories given as input to the HierarchicalMSMTree in
         update_transition_counts.
 
-        For example, if a Molecular Dynamics simulation is sampled in timesteps of 2e-15 seconds,
+        For example, if a Molecular dynamics simulation is sampled in timesteps of 2e-15 seconds,
         resulting in (x_0, x_1, ..., x_n), and then one every tenth sample is taken (x_0, x_10,...)
         and discretized into microstates, resulting in (microstate_0, microstate_10, ...) and
         this trajectory is used as input to HierarchicalMSMTree, the timestep resolution of this
@@ -67,10 +67,12 @@ class HierarchicalMSMVertex:
     parent : int
         The id of the parent of this vertex in the tree.
     T : np.ndarray of shape (n+len(neighbors),n+len(neighbors))
-        The transition probability matrix of this MSM, representing transitions between vertices
-        of the MSM (the children of this vertex in the tree) and from vertices of the MSM to
-        neighboring MSMs (vertices on the same level as this one in the tree)
-    timescale : float
+        The transition probability matrix of this MSM over tau basic timesteps (see tau), from row to column.
+        The upper-left n x n block represents transition probabilities among self.children().
+        The upper-right n x len(neighbors) block stores transition probabilities from self.children() to neighbor vertices.
+        The lower-left len(neighbors) x n block is 0
+        The lower-right len(neighbors) x len(neighbors) block is an identity block matrix
+    timescale : float # TODO: documnet units of timescale
         The timescale associated with the slowest process described by this MSM.
     is_root : bool
         True iff this vertex is the root of the tree.
@@ -97,7 +99,7 @@ class HierarchicalMSMVertex:
         self.config = config
 
         self._T_is_updated = False
-        self._last_update_sent = None
+        self._last_update_sent = None # last external T sent to parent - output of last call to self.get_external_T() # TODO: refine this description
 
 
     @property
@@ -231,7 +233,7 @@ class HierarchicalMSMVertex:
         self._T[self.n:, self.n:] = np.eye(n_external)
         linalg._assert_stochastic(self._T)
         # get the transition matrix in timestep resolution self.tau
-        self._T_tau = np.linalg.matrix_power(self._T, self.tau)
+        self._T_tau = np.linalg.matrix_power(self._T, self.tau) # TODO: rename _T with _T_1
 
         # check if there are any children which should be one of my neighbors children instead
         vertices_to_disown = self._check_disown(id_2_index, n_external)
@@ -339,7 +341,7 @@ class HierarchicalMSMVertex:
 
     def get_external_T(self, tau=1) -> tuple:
         """get_external_T.
-        Get the transition probabilities between this vertex and its neighbors on the same level
+        Get the transition probabilities between this vertex and its neighbors at the same level
         of the tree.
 
         Parameters
