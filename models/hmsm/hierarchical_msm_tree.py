@@ -4,12 +4,13 @@
 
 from collections import defaultdict
 import numpy as np
+from HMSM import base
 from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.prototype.hierarchical_msm_vertex import HierarchicalMSMVertex
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 
 
-class HierarchicalMSMTree:
+class HierarchicalMSMTree(base.HierarchicalMSMTree):
     """HierarchicalMSMTree.
     This class encapsulates the HMSM data structure, and provides an interface for it.
     The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
@@ -189,6 +190,7 @@ class HierarchicalMSMTree:
         """
         updated_microstates = set()
         parents_2_new_microstates = defaultdict(set)
+        #TODO move all of this to separate function
         for dtraj in dtrajs:
             updated_microstates.update(dtraj)
             src = dtraj[0]
@@ -206,10 +208,7 @@ class HierarchicalMSMTree:
 
                 # assign newly discovered microstates to the MSM they were discovered from
                 if self._microstate_parents.get(dst) is None:
-                    if self.height == 1:
-                        parent = self.root
-                    else:
-                        parent = self._microstate_parents[src]
+                    parent = self._microstate_parents[src]
                     self._microstate_parents[dst] = parent
                     parents_2_new_microstates[parent].add(dst)
                 src = dst
@@ -218,6 +217,7 @@ class HierarchicalMSMTree:
         for parent, children in parents_2_new_microstates.items():
             self.vertices[parent].add_children(children)
         #update transition probabilities from observed transitions
+        #TODO use self.config['estimator'] to determine the estimator type.
         if update_MMSE:
             for vertex_id in updated_microstates:
                 self._microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)

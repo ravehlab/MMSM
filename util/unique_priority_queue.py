@@ -7,6 +7,7 @@ class UniquePriorityQueue:
     A class for a simple priority queue, with no duplicate values (even if they have different
     priorities).
     """
+    # TODO: MOVE models.util
     def __init__(self):
         self._queue = PriorityQueue()
         self._items = set()

@@ -70,6 +70,7 @@ def max_fractional_difference(ext_T1, ext_T2):
     the maximal difference in transition probabilities, as a fractional difference, that is:
     max[abs(1-(p1/p2)) for p1 in ext_T1 and p2 in ext_T2 with matching ids]
     """
+    # MOVE: models.util
     ids1, T1 = ext_T1
     ids2, T2 = ext_T2
     assert T1.shape == T2.shape, "external_T has changed shape since last update"
@@ -164,6 +165,7 @@ def two_fold_gibbs_split(hmsm):
     """Get a partition of a vertex, assuming the parent's time resolution tau is twice that of
     this vertex.
     """
+    # MOVE: estimators
     n = hmsm.n
     T = hmsm.T[:n, :n]
     tau = hmsm.tau
@@ -177,6 +179,7 @@ def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
     """Get a function which checks if a vertices size or timescale are larger than some constant,
     provided as arguments to this function.
     """
+    # MOVE: estimators
     def _split_condition(hmsm):
         #TODO max_timescale should depend on parents timescale
         return hmsm.timescale/hmsm.tau > max_timescale or hmsm.n > max_size
@@ -185,10 +188,12 @@ def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
 def uniform_sample(hmsm):
     """Samples one of this vertices children uniformly.
     """
+    # MOVE: optimizers
     uniformly_chosen_child = np.random.choice(hmsm.n)
     return hmsm.children[uniformly_chosen_child]
 
 def uncertainty_minimization(hmsm):
+    # MOVE: optimizers
     children = hmsm.children
     eps = 1e-12
     p = np.ndarray(hmsm.n)
@@ -240,6 +245,7 @@ def get_default_config(**kwargs):
     config : dict
         Dictionary of of model parameters.
     """
+    # MOVE: models.util
     config = {
               "n_microstates" : 20,
               "n_samples" : 5,
