@@ -16,7 +16,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
     The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
     class.
     Most importantly, the method update_model_from_trajectories() allows the user to simply input
-    observed discrete trajectories, (in the form of an iterable of state ids), and the estimation
+    observed discrete trajectories (in the form of an iterable of state ids), and the estimation
     of a Hierarchical Markov Model is entirely automated - including estimating a hierarchy of
     metastable states and transition rates between them in different timescales.
 
@@ -24,19 +24,20 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
     ----------
     config : dict
         A dictionary of model parameters.
+        # TODO: define a stadard for these parameters, and also - these are probably not model parameters but parameters of this class/inner algorithms/etc.
 
     Attributes
     ----------
     height : int
         The height of the tree
     vertices : dict
-        A dictionary mapping the vertex ids of all the nodes in the tree to their
-        HierarchicalMSMVertex object
+        A dictionary mapping the vertex ids of all nodes in the tree to the correspoding
+        HierarchicalMSMVertex objects
     alpha : int or float
         The parameter of the Dirichlet distribution used as a prior for transition probabilities
         between microstates.
     root : int
-        The id of the root HierarchicalMSMVertex of the tree.
+        The id of the root vertex
     """
 
 
@@ -184,7 +185,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         Parameters
         ----------
         dtrajs : iterable
-            an iterable of ids of states
+            an iterable of trahjectories, where each trajectory is an iterable of state ids
         update_MMSE : bool
             if True, update the estimated transition probabilities of each vertex that was observed
         """
@@ -192,6 +193,8 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         parents_2_new_microstates = defaultdict(set)
         #TODO move all of this to separate function
         for dtraj in dtrajs:
+            if len(dtraj)==0:
+                continue
             updated_microstates.update(dtraj)
             src = dtraj[0]
             if not self._is_microstate(src): #TODO clean this bit up
@@ -275,8 +278,8 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
                 T[i,j] = transition_probability
         return T, id_2_index
 
-    def full_stationary_distribution(self):
-        """full_stationary_distribution.
+    def get_full_stationary_distribution(self):
+        """get_full_stationary_distribution.
         Get the stationary distribution over all microstates.
 
         Returns
@@ -292,7 +295,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         return pi
 
 
-    def _dirichlet_MMSE(self, vertex_id):
+    def _get_dirichlet_MMSE(self, vertex_id): # TODO - update name in calling function
         """
         Get the equivalent of external_T, but for a microstate.
         """

@@ -2,6 +2,7 @@
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
+import logging
 import warnings
 import numpy as np
 from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
@@ -116,7 +117,7 @@ class HierarchicalMSM:
         return self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
 
     # TODO: (long term, not now) - add expand by confidence interval, maybe there should be an
-    # expand vs. exploit mode, or jsut according to parameters
+    # expand vs. exploit mode, or just according to parameters
     def expand(self, max_cputime=np.inf, max_samples=np.inf, min_timescale_sec=np.inf):
         """
         Estimate an HMSM by sampling from the sampler.
@@ -138,17 +139,16 @@ class HierarchicalMSM:
 
         max_values = {'n_samples' : max_samples, 'timescale' : min_timescale_sec}
         stop_condition = util.get_threshold_check_function(max_values, max_time=max_cputime)
-        n_samples = 0
+        cur_n_samples = 0
         timescale = np.inf
-        batch_size = self.batch_size
 
-        while not stop_condition(n_samples=n_samples, timescale=timescale):
+        while not stop_condition(n_samples=cur_n_samples, timescale=timescale):
             microstates = self._hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
             self._batch_sample_and_expand(microstates)
-            n_samples += batch_size
-            self._n_samples += batch_size
+            cur_n_samples += self.batch_size
+            self._n_samples += self.batch_size
             timescale = self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
-            print(f"Samples used: {self._n_samples}, timescale: {timescale}")
+            logging.info(f"Samples used: {self._n_samples}, timescale: {timescale}") # TODO: add logging beureaucracy
 
     def _batch_sample_and_expand(self, microstates):
         dtrajs = self._sampler.sample_from_microstates(microstates,\
