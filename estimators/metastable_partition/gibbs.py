@@ -2,36 +2,39 @@
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
-from HMSM import base
 import numpy as np
+from HMSM import base
+from HMSM.util.linalg import normalize_rows
+from .util import get_size_or_timescale_split_condition, spectral
 
 __all__ = ['GibbsPartition']
 
-class GibbsPartition(base.MetastablePartition)
-    
-    def __init__(self, max_k_method='default', transition_parameter='0.75'):
+class GibbsPartition(base.MetastablePartition):
+
+    def __init__(self, max_k_method='default', transition_parameter='0.75', \
+                 max_size=2048, max_timescale=64):
         self.max_k_method = max_k_method
         self.transition_parameter = transition_parameter
+        self._split_condition = get_size_or_timescale_split_condition(max_size, max_timescale)
 
     def _get_max_k(self, n):
-        if self.max_k_method == 'default' or '2_sqrt':
-            return 2*int(np.sqrt(hmsm.n))
+        if self.max_k_method in ('default', '2_sqrt'):
+            return 2*int(np.sqrt(n))
         #TODO max_k should depend on number of eigenvalues with timescale greater than 2*Tau,
         #     or something similar
-        else: 
-            raise NotImplementedError(f"max_k_method {self.max_k_method} not implemented")
+        raise NotImplementedError(f"max_k_method {self.max_k_method} not implemented")
 
-    def check_split_condition(self, msm):
-        pass
+    def check_split_condition(self, hmsm):
+        return self._split_condition(hmsm)
 
-    def get_metastable_partition(self, msm)
+    def get_metastable_partition(self, hmsm):
         """Get a partition of a vertex, assuming the parent's time resolution tau is twice that of
         this vertex.
         """
         n = hmsm.n
         T = hmsm.T[:n, :n]
         tau = hmsm.tau
-        max_k = min(self._get_max_k(n), n-1) 
+        max_k = min(self._get_max_k(n), n-1)
         partition = _gibbs_metastable_clustering(T, 2*tau, max_k, self.transition_parameter)
         taus = [tau]*len(partition) #TODO get method for calculating taus in init
         return partition, taus
@@ -52,7 +55,7 @@ def _gibbs_metastable_clustering(T, tau, max_k, transition_parameter, init='spec
                                maximum_likelihood, transition_parameter)
     if maximum_likelihood:
         # the last iteration _is_ the MLE, so we only need one sample
-        clustering = _get_MLE_clusters(gibbs_clusters, n_samples=1) 
+        clustering = _get_MLE_clusters(gibbs_clusters, n_samples=1)
     else:
         clustering = _get_MLE_clusters(gibbs_clusters, mle_fraction)
 
