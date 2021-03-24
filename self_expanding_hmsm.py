@@ -6,8 +6,8 @@ from abc import ABC
 
 import warnings
 import numpy as np
-from HMSM.prototype.hierarchical_msm_tree import HierarchicalMSMTree
-from HMSM.util import util
+from util import util, HMSMConfig
+from base import BaseSampler, BaseDiscretizer
 
 class SelfExpandingHierarchicalMSM(ABC):
     """SelfExpandingHierarchicalMSM
@@ -32,7 +32,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     partition_estimator : MetastablePartition
         If partition_estimator is 'manual', this argument will be used as the partition
         optimizer.
-    
+
 
 
     Other Parameters
@@ -70,7 +70,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     --------
     >>> sampler = BrownianDynamicsSampler(force_function, dim=2, dt=2e-15, kT=1)
     >>> discretizer = KCentersCoarseGrain(cutoff=3, dim=2)
-    >>> hmsm = SelfExpandingHierarchicalMS(sampler, discretizer) 
+    >>> hmsm = SelfExpandingHierarchicalMS(sampler, discretizer)
 
     sample and update in batches for 1 minute in CPU time:
 
@@ -99,7 +99,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     def __init__(self, sampler:BaseSampler, discretizer:BaseDiscretizer,\
                  config:HMSMConfig=None, **config_kwargs):
         self._sampler = sampler
-        self.sampler.set_discretizer(discretizer)
+        self._sampler.set_discretizer(discretizer)
         self._discretizer = discretizer
         if config is None:
             self.config = HMSMConfig(**config_kwargs)
@@ -110,7 +110,7 @@ class SelfExpandingHierarchicalMSM(ABC):
         self._effective_timestep_seconds = self._sampler.dt * self.config.base_tau
         self._init_sample()
 
-    def _init_tree(self, tree_type, sampling_optimizer_type, partition_estimator):
+    def _init_tree(self):
         if self.config.tree_type in ('auto', 'single_thread'):
             tree = models.hmsm.HierarchicalMSMTree(self.config)
         else:
@@ -119,7 +119,7 @@ class SelfExpandingHierarchicalMSM(ABC):
         return tree
 
 
-    def _init_sample(self, start_points):
+    def _init_sample(self):
         dtrajs = self._sampler.get_initial_sample(self.config.n_samples,\
                                                   self.config.sample_len,\
                                                   self.config.base_tau)
@@ -179,5 +179,3 @@ class SelfExpandingHierarchicalMSM(ABC):
             n_samples += batch_size
             self._n_samples += batch_size
             timescale = self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
-
-    def _batch_sample_and_expand(self, microstates):
