@@ -403,7 +403,7 @@ class HierarchicalMSMVertex:
 
 
     def _check_split_condition(self):
-        return self._partition_estimator.check_split_contidion(self)
+        return self._partition_estimator.check_split_condition(self)
 
     def _get_partition(self):
         # return (partition, taus) where partition is an iterable of iterables of children_ids

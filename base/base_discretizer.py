@@ -2,7 +2,8 @@
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
-from abc import ABC
+from abc import ABC, abstractmethod
+import numpy as np
 
 class BaseDiscretizer(ABC):
     """BaseDiscretizer.

@@ -10,7 +10,7 @@ from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.models.hmsm import HierarchicalMSMVertex
 
 
-class HierarchicalMSMTree(base.HierarchicalMSMTree):
+class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
     """HierarchicalMSMTree.
     This class encapsulates the HMSM data structure, and provides an interface for it.
     The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
@@ -613,12 +613,8 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         next_states, transition_probabilities = self.get_external_T(vertex_id)
         return np.random.choice(next_states, p=transition_probabilities)
 
-    def sample_microstate(self, n_samples, vertex_id=None):
-        """sample_microstate.
-        Get a microstate from this HMSM, ideally chosen such that sampling a random walk from
-        this microstate is expected to increase some objective function.
-
-        return: microstate_id, the id of the sampled microstate.
+    def sample_states(self, n_samples, vertex_id=None):
+        """sample_states.
         """
         if vertex_id is None:
             vertex_id = self.root

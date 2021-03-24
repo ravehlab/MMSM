@@ -2,7 +2,7 @@
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
-from abc import ABC
+from abc import ABC, abstractmethod
 
 class BaseSampler(ABC):
 

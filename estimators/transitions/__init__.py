@@ -1,1 +1,1 @@
-from .dirichlet_mmse import diriclet_MMSE
+from .dirichlet_mmse import dirichlet_MMSE

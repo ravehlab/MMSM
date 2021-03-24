@@ -1,4 +1,4 @@
-
+import numpy as np
 
 def dirichlet_MMSE(transitions, alpha):
         MMSE_ids = np.array(list(transitions.keys()), dtype=int)

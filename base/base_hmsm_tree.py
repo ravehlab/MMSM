@@ -2,7 +2,7 @@
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
-from abc import ABC
+from abc import ABC, abstractmethod
 
 class BaseHierarchicalMSMTree(ABC):
     """HierarchicalMSMTree.
@@ -41,7 +41,6 @@ class BaseHierarchicalMSMTree(ABC):
                 prior for transition probabilities.
     """
 
-    def __init__(self, config):
 
     @abstractmethod
     def update_model_from_trajectories(self, dtrajs):

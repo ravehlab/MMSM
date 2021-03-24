@@ -3,8 +3,7 @@
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 import numpy as np
-from util import k_centers, extend_k_centers
-from HMSM.util import count_dict, get_unique_id
+from HMSM.util.util import count_dict, get_unique_id
 
 __all__ = ["KCentersDiscretizer"]
 

@@ -11,7 +11,7 @@ __all__ = ['GibbsPartition']
 
 class GibbsPartition(base.MetastablePartition):
 
-    def __init__(self, max_k_method='default', transition_parameter='0.75', \
+    def __init__(self, max_k_method='default', transition_parameter=0.75, \
                  max_size=2048, max_timescale=64):
         self.max_k_method = max_k_method
         self.transition_parameter = transition_parameter

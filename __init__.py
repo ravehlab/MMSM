@@ -1,3 +1,4 @@
+from .hmsm_config import HMSMConfig 
 from . import base
 from . import discretizers
 from . import estimators
@@ -6,5 +7,4 @@ from . import optimizers
 from . import plots
 from . import samplers
 from . import util
-from .hmsm_config import HMSMConfig 
 from .self_expanding_hmsm import SelfExpandingHierarchicalMSM

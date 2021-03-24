@@ -18,6 +18,7 @@ class HMSMConfig:
     n_microstates: int=20
     n_samples: int=5
     sample_len: int=5
+    alpha: int=1
     parent_update_condition: str='auto'
     parent_update_threshold: float=0.1
     sampling_optimizer: str='auto'
@@ -30,6 +31,7 @@ class HMSMConfig:
     n_microstates: int=20
     n_samples: int=5
     sample_len: int=5
+    alpha: int=1
     parent_update_condition: str='auto'
     parent_update_threshold: float=0.1
     sampling_optimizer: str='auto'

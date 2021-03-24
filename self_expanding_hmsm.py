@@ -6,8 +6,9 @@ from abc import ABC
 
 import warnings
 import numpy as np
-from util import util, HMSMConfig
-from base import BaseSampler, BaseDiscretizer
+from HMSM import HMSMConfig
+from HMSM.util import util
+from HMSM.base import BaseSampler, BaseDiscretizer
 
 class SelfExpandingHierarchicalMSM(ABC):
     """SelfExpandingHierarchicalMSM
