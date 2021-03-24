@@ -5,9 +5,9 @@
 from collections import defaultdict
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution #TODO include this function in package
-from HMSM import base, estimators, HMSMConfig
+from HMSM import base, estimators, HMSMConfig, optimizers
 from HMSM.util import util, UniquePriorityQueue, linalg
-from . import HierarchicalMSMVertex
+from HMSM.models.hmsm import HierarchicalMSMVertex
 
 
 class HierarchicalMSMTree(base.HierarchicalMSMTree):
@@ -42,11 +42,13 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
 
 
     def __init__(self, config:HMSMConfig):
+        self.config = config
+        self._partition_estimator = estimators.metastable_partition.get_metastable_partition(config)
+        self._sample_optimizer = optimizers.get_optimizer(config)
         self._microstate_parents = dict()
         self._microstate_counts = util.count_dict(depth=2)
         self._microstate_transitions = dict()
         self._last_update_sent = dict()
-        self.config = config
         self._update_queue = UniquePriorityQueue()
         self._levels = defaultdict(list)
         self.vertices = dict()
@@ -77,6 +79,8 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
                                            parent=None,\
                                            tau=1,\
                                            height=1,
+                                           partition_estimator=self._partition_estimator,\
+                                           sample_optimizer=self._sample_optimizer,\
                                            config=self.config)
         self._add_vertex(root)
         self._root = root.id
@@ -351,7 +355,10 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         new_vertices = []
         for i, subset in enumerate(partition):
             vertex = HierarchicalMSMVertex(self, subset, parent, \
-                                           taus[i], split_vertex.height, self.config)
+                                           taus[i], split_vertex.height, \
+                                           partition_estimator=self._partition_estimator,\
+                                           sample_optimizer=self._sample_optimizer,\
+                                           config=self.config)
             self._add_vertex(vertex)
             self._connect_to_new_parent(subset, vertex.id)
             new_vertices.append(vertex.id)

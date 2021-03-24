@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
+from HMSM.models.hmsm.util import get_parent_update_condition
 
 
 class HierarchicalMSMVertex:
@@ -83,7 +84,7 @@ class HierarchicalMSMVertex:
     UPDATE_PARENT = "UPDATE_PARENT"
     SUCCESS = "SUCCESS"
 
-    def __init__(self, tree, children, parent, tau, height, config):
+    def __init__(self, tree, children, parent, tau, height, partition_estimator, sample_optimizer, config):
         self.__id = util.get_unique_id()
         self.tree = tree
         self._children = set(children)
@@ -91,11 +92,13 @@ class HierarchicalMSMVertex:
             self.parent = self.__id
         else:
             self.parent = parent
-        self.tau = tau
+        self.tau = tau #TODO: maybe this should be calculated locally, not given as a parameter?
         self.height = height
+        self._partition_estimator = partition_estimator
+        self._sample_optimizer = sample_optimizer
         self._neighbors = []
-
-
+        self._parent_update_condition = get_parent_update_condition(config.parent_update_condition,\
+                                                                    config.parent_update_threshold)
         self.config = config
 
         self._T_is_updated = False
@@ -148,10 +151,6 @@ class HierarchicalMSMVertex:
     def is_root(self):
         return self.parent == self.id
 
-    @property
-    def parent_update_threshold(self):
-        return self.config["parent_update_threshold"]
-
     def set_parent(self, parent):
         self.parent = parent
 
@@ -184,9 +183,8 @@ class HierarchicalMSMVertex:
         if set(self._last_update_sent[0]) != set(self.get_external_T()[0]):
             return True
 
-        max_change_factor = util.max_fractional_difference(self._last_update_sent, \
-                                                      self.get_external_T())
-        return max_change_factor >= self.parent_update_threshold
+        return self._parent_update_condition(self)
+
 
     def _update_T(self):
         """
@@ -216,9 +214,11 @@ class HierarchicalMSMVertex:
             linalg._assert_stochastic(row, axis=0)
             column_ids = column_ids.union(ids)
 
+        # Get a mapping between indices of the matrix T and the vertex_ids they represent
         id_2_index, index_2_id, full_n = self._get_id_2_index_map(column_ids)
         self.index_2_id = index_2_id
 
+        # Initialize the transition matrix
         self._T = np.zeros((full_n, full_n))
         n_external = full_n - self.n # number of external vertices
 
@@ -229,28 +229,34 @@ class HierarchicalMSMVertex:
                 column = id_2_index[id]
                 self._T[row, column] += transition_probability
 
+        if self.config.transition_estimator != 'Dirichlet_MMSE':
+            #TODO:
+            #if MLE_reversible estimator is implemented, it should be used here on self._T[:n, :n]
+            raise NotImplementedError(f"transition estimator {self.config.transition_estimator}\
+                                        not implemented, Only Dirichlet_MMSE is currently supported")
+
+
         #make the external vertices sinks
         self._T[self.n:, self.n:] = np.eye(n_external)
         linalg._assert_stochastic(self._T)
-        # get the transition matrix in timestep resolution self.tau
-        self._T_tau = np.linalg.matrix_power(self._T, self.tau) # TODO: rename _T with _T_1
+        # get the transition matrix in timestep resolution self.tau #TODO Move down 8 lines if it doesn't break anything.
+        self._T_tau = np.linalg.matrix_power(self._T, self.tau) # TODO: rename _T with _T_1.
 
         # check if there are any children which should be one of my neighbors children instead
         vertices_to_disown = self._check_disown(id_2_index, n_external)
         if vertices_to_disown:
             self._T_is_updated = False
             return HierarchicalMSMVertex.DISOWN_CHILDREN, vertices_to_disown
+
+        # update variables derived from self._T
         self._T_is_updated = True
         self._update_timescale()
         self._update_external_T()
 
-
         if self._check_split_condition():
             return HierarchicalMSMVertex.SPLIT, self._split()
-
         if self._check_parent_update_condition():
             return HierarchicalMSMVertex.UPDATE_PARENT, None
-
         return HierarchicalMSMVertex.SUCCESS, None
 
     def _get_id_2_index_map(self, column_ids):
@@ -318,7 +324,6 @@ class HierarchicalMSMVertex:
         return parents[np.where(counts==max(counts))]
 
 
-
     def _get_most_likely_parent(self, row, n_external):
         temp_row = np.ndarray(1+n_external)
         temp_row[0] = np.sum(self._T[row, :self.n]) - self._T[row, row]
@@ -338,6 +343,7 @@ class HierarchicalMSMVertex:
         T = self.T[:n, :n]
         T = linalg.normalize_rows(T)
         return stationary_distribution(T)
+
 
     def get_external_T(self, tau=1) -> tuple:
         """get_external_T.
@@ -397,30 +403,32 @@ class HierarchicalMSMVertex:
 
 
     def _check_split_condition(self):
-        return self.config["split_condition"](self)
+        return self._partition_estimator.check_split_contidion(self)
 
     def _get_partition(self):
         # return (partition, taus) where partition is an iterable of iterables of children_ids
-        return self.config["split_method"](self)
+        return self._partition_estimator.get_metastable_partition(self)
 
     def _split(self):
         index_partition, taus = self._get_partition()
         if len(index_partition)==1:
-            warnings.warn(f"split was called, but {self.config['split_method']} was unable to \
-                            find a partition", RuntimeWarning)
+            warnings.warn("split was called, but no partition was found", RuntimeWarning) #TODO logger
         id_partition = [ [self.index_2_id[index] for index in subset] \
                             for subset in index_partition]
 
         return id_partition, taus, self, self.parent
 
     def sample_microstate(self, n_samples):
-        """Get a microstate from this MSM, ideally chosen such that sampling a random walk from
-        this microstate is expected to increase some objective function.
+        """Get a set of microstate from this MSM, ideally chosen such that sampling a random walk
+        from these microstates is expected to increase some objective function.
 
-        return: microstate_id, the id of the sampled microstate.
+        Returns:
+        -------
+        samples : list
+            A list of ids of microstates.
         """
         # a sample of n_samples vertices from this msm:
-        sample = [self.config["sample_method"](self) for _ in range(n_samples)]
+        sample = self._sample_optimizer(self, n_samples)
         if self.height == 1:
             return sample
 
@@ -441,7 +449,7 @@ class HierarchicalMSMVertex:
         Returns
         -------
         microstates : set
-            A set of all the ids of the microstates at the leaves of the subtree of which this 
+            A set of all the ids of the microstates at the leaves of the subtree of which this
             vertex is the root.
         """
         if self.height == 1:
