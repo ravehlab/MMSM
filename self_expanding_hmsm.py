@@ -70,7 +70,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     --------
     >>> sampler = BrownianDynamicsSampler(force_function, dim=2, dt=2e-15, kT=1)
     >>> discretizer = KCentersCoarseGrain(cutoff=3, dim=2)
-    >>> hmsm = SelfExpandingHierarchicalMS(sampler, discretizer)
+    >>> hmsm = SelfExpandingHierarchicalMSM(sampler, discretizer)
 
     sample and update in batches for 1 minute in CPU time:
 
