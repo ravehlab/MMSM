@@ -4,10 +4,10 @@
 
 from collections import defaultdict
 import numpy as np
-from HMSM import base
+from msmtools.analysis.dense.stationary_vector import stationary_distribution #TODO include this function in package
+from HMSM import base, estimators, HMSMConfig
 from HMSM.util import util, UniquePriorityQueue, linalg
-from HMSM.prototype.hierarchical_msm_vertex import HierarchicalMSMVertex
-from msmtools.analysis.dense.stationary_vector import stationary_distribution
+from . import HierarchicalMSMVertex
 
 
 class HierarchicalMSMTree(base.HierarchicalMSMTree):
@@ -41,10 +41,10 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
     """
 
 
-    def __init__(self, config):
+    def __init__(self, config:HMSMConfig):
         self._microstate_parents = dict()
         self._microstate_counts = util.count_dict(depth=2)
-        self._microstate_MMSE = dict()
+        self._microstate_transitions = dict()
         self._last_update_sent = dict()
         self.config = config
         self._update_queue = UniquePriorityQueue()
@@ -83,7 +83,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
 
     @property
     def alpha(self):
-        return self.config["alpha"]
+        return self.config.alpha
 
     @property
     def root(self):
@@ -122,7 +122,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
 
     def get_external_T(self, vertex_id, tau=1):
         """get_external_T.
-        Get the transition probabilities between this vertex and other vertices on the same level
+        Get the transition probabilities between a vertex and other vertices on the same level
         of the tree.
 
         Parameters
@@ -142,14 +142,30 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         """
         if self._is_microstate(vertex_id):
             assert tau==1
-            ids, ext_T = self._microstate_MMSE[vertex_id]
+            ids, ext_T = self._microstate_transitions[vertex_id]
             self._last_update_sent[vertex_id] = [ids, ext_T]
             return ids, ext_T
         return self.vertices[vertex_id].get_external_T(tau)
 
     def get_n_samples(self, vertex):
+        """get_n_samples.
+        Get the total number of times this vertex has appeared in trajectories used to estimate
+        this HMSM.
+
+        Parameters
+        ----------
+        vertex : int
+            The id of the vertex
+
+        Returns
+        -------
+        n_samples : int
+            If the vertex is a set of vertices, this is the sum of this value over all the vertices
+            in the set, otherwise this is simply the number of appearances of this vertex in
+            trajectories passed to the method self.update_model_from_trajectories.
+        """
         if self._is_microstate(vertex):
-            return max(1,np.sum([counts for counts in self._microstate_counts[vertex].values()]))
+            return max(1, sum(self._microstate_counts[vertex].values()))
         return self.vertices[vertex].n_samples
 
 
@@ -178,7 +194,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         """
         return self.vertices[self.root].timescale
 
-    def update_model_from_trajectories(self, dtrajs, update_MMSE=True):
+    def update_model_from_trajectories(self, dtrajs):
         """update_model_from_trajectories.
         Update the Hierarchical MSM with data from observed discrete trajectories.
 
@@ -186,44 +202,20 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         ----------
         dtrajs : iterable
             an iterable of trahjectories, where each trajectory is an iterable of state ids
-        update_MMSE : bool
+        update_transitions : bool
             if True, update the estimated transition probabilities of each vertex that was observed
         """
-        updated_microstates = set()
-        parents_2_new_microstates = defaultdict(set)
-        #TODO move all of this to separate function
-        for dtraj in dtrajs:
-            if len(dtraj)==0:
-                continue
-            updated_microstates.update(dtraj)
-            src = dtraj[0]
-            if not self._is_microstate(src): #TODO clean this bit up
-                assert self.height==1
-                self._microstate_parents[src] = self.root
-                parents_2_new_microstates[self.root].add(src)
-            for i in range(1, len(dtraj)):
-                dst = dtraj[i]
-                # count the observed transition, and a pseudocount for the reverse transition
-                self._microstate_counts[src][dst] += 1
-                # evaluate the reverse transition, so that it will be set to 0 if none have been
-                # observed yet. This is so that the prior weight of this transition will be alpha
-                _=self._microstate_counts[dst][src]
 
-                # assign newly discovered microstates to the MSM they were discovered from
-                if self._microstate_parents.get(dst) is None:
-                    parent = self._microstate_parents[src]
-                    self._microstate_parents[dst] = parent
-                    parents_2_new_microstates[parent].add(dst)
-                src = dst
-
+        updated_microstates, parents_2_new_microstates = self._count_transitions(dtrajs)
         # add newly discovered microstates to their parents
         for parent, children in parents_2_new_microstates.items():
             self.vertices[parent].add_children(children)
+
         #update transition probabilities from observed transitions
-        #TODO use self.config['estimator'] to determine the estimator type.
-        if update_MMSE:
+        if self.config.transition_estimator == 'Dirichlet_MMSE':
             for vertex_id in updated_microstates:
-                self._microstate_MMSE[vertex_id] = self._dirichlet_MMSE(vertex_id)
+                self._microstate_transitions[vertex_id] = estimators.transitions.dirichlet_MMSE(\
+                                                  self._microstate_counts[vertex_id], self.alpha)
 
         # update the vertices of the tree from the leaves upwards
         for vertex_id in updated_microstates:
@@ -261,7 +253,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         Returns
         -------
         T : np.ndarray of shape (n,n), where n is the number of microstates in the tree
-            Transition probability matrix, in timestep of config["base_tau"]
+            Transition probability matrix, in timestep of config.base_tau
         id_2_index : dict
             Dictionary mapping microstate ids to their indices in T
         """
@@ -270,7 +262,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         id_2_index = dict()
         for i, microstate_id in enumerate(self._microstate_parents.keys()):
             id_2_index[microstate_id] = i
-        for src, (ids, row) in self._microstate_MMSE.items():
+        for src, (ids, row) in self._microstate_transitions.items():
             i = id_2_index[src]
             for id, transition_probability in zip(ids, row):
                 assert transition_probability >= 0
@@ -294,30 +286,50 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
             pi[id] = st[index]
         return pi
 
+    def _count_transitions(self, dtrajs):
+        updated_microstates = set()
+        parents_2_new_microstates = defaultdict(set)
+        for dtraj in dtrajs:
+            if len(dtraj)==0:
+                continue
+            updated_microstates.update(dtraj)
+            src = dtraj[0]
+            if not self._is_microstate(src): #TODO clean this bit up
+                assert self.height==1
+                self._microstate_parents[src] = self.root
+                parents_2_new_microstates[self.root].add(src)
+            for i in range(1, len(dtraj)):
+                dst = dtraj[i]
+                # count the observed transition, and a pseudocount for the reverse transition
+                self._microstate_counts[src][dst] += 1
+                # evaluate the reverse transition, so that it will be set to 0 if none have been
+                # observed yet. This is so that the prior weight of this transition will be alpha
+                _=self._microstate_counts[dst][src]
 
-    def _get_dirichlet_MMSE(self, vertex_id): # TODO - update name in calling function
-        """
-        Get the equivalent of external_T, but for a microstate.
-        """
-        MMSE_ids = np.array(list(self._microstate_counts[vertex_id].keys()), dtype=int)
-        MMSE_counts = np.array(list(self._microstate_counts[vertex_id].values())) + self.alpha
-        MMSE_counts = MMSE_counts/np.sum(MMSE_counts)
-        return (MMSE_ids, MMSE_counts)
+                # assign newly discovered microstates to the MSM they were discovered from
+                if self._microstate_parents.get(dst) is None:
+                    parent = self._microstate_parents[src]
+                    self._microstate_parents[dst] = parent
+                    parents_2_new_microstates[parent].add(dst)
+                src = dst
+        return updated_microstates, parents_2_new_microstates
+
 
     def _check_parent_update_condition(self, microstate):
         """Check if a microstates transition probabilities have changed enough to trigger
         its parent to update
+        #TODO use config.parent_update_condition
         """
         # check if no updates have been made yet
         if self._last_update_sent.get(microstate) is None:
             return True
         # check if new transitions have been observed since last update
-        if set(self._last_update_sent[microstate][0])!=set(self._microstate_MMSE[microstate][0]):
+        if set(self._last_update_sent[microstate][0])!=set(self._microstate_transitions[microstate][0]):
             return True
 
         max_change_factor = util.max_fractional_difference(self._last_update_sent[microstate], \
-                                                           self._microstate_MMSE[microstate])
-        return max_change_factor >= self.config["parent_update_threshold"]
+                                                           self._microstate_transitions[microstate])
+        return max_change_factor >= self.config.parent_update_threshold
 
 
     def _connect_to_new_parent(self, children_ids, parent_id):
@@ -457,7 +469,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
 
         Parameters
         ----------
-        vertex : 
+        vertex :
             vertex
         level :
             level
@@ -512,7 +524,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
             return np.linalg.matrix_power(T, tau), level
         return np.linalg.matrix_power(T, tau)
 
-    def sample_from_stationary(self, vertex, level):
+    def sample_from_stationary(self, vertex, level=0):
         """sample_from_stationary.
         Sample on of the descendents of vertex, from the stationary distribution of the vertex.
 
@@ -552,7 +564,7 @@ class HierarchicalMSMTree(base.HierarchicalMSMTree):
         """
         sample = np.ndarray(sample_length)
         if start is None:
-            start = np.random.choice(list(self._microstate_MMSE.keys()))
+            start = np.random.choice(list(self._microstate_transitions.keys()))
         current = start
         for i in range(sample_length):
             current = self._random_step(current)
