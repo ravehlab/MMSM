@@ -6,6 +6,9 @@ from abc import ABC, abstractmethod
 
 class BaseSampler(ABC):
 
+    def __init__(self, discretizer):
+        self._discretizer = discretizer
+
     @abstractmethod
     def sample_from_states(self, states, sample_len, n_samples, sample_interval=1):
         """sample_from_states.
@@ -59,14 +62,3 @@ class BaseSampler(ABC):
             discrete trajectory (a sequence of states).
         """
         pass
-
-    def set_discretizer(self, discretizer):
-        """set_discretizer.
-
-        Parameters
-        ----------
-        discretizer : CoarseGrain
-            The CoarseGrain object used to discretize trajectories.
-        """
-        self._discretizer = discretizer
-

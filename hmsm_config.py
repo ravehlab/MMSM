@@ -27,6 +27,7 @@ class HMSMConfig:
     partition_kwargs: dict=field(default_factory=dict)
     transition_estimator: str='Dirichlet_MMSE'
     """
+    tree_type: str='auto'
     base_tau: int=1
     n_microstates: int=20
     n_samples: int=5

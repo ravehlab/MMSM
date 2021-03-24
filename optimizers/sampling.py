@@ -10,13 +10,13 @@ def get_optimizer(config:HMSMConfig):
     else:
         raise NotImplementedError(f"Optimizer {config.sampling_optimizer} not implemented.")
 
-def uniform_sample(hmsm):
+def uniform_sample(hmsm, n_samples):
     """Samples one of this vertices children uniformly.
     """
-    uniformly_chosen_child = np.random.choice(hmsm.n)
+    uniformly_chosen_child = np.random.choice(hmsm.n, size=n_samples)
     return hmsm.children[uniformly_chosen_child]
 
-def uncertainty_minimization(hmsm):
+def uncertainty_minimization(hmsm, n_samples):
     children = hmsm.children
     eps = 1e-12
     p = np.ndarray(hmsm.n)
@@ -24,4 +24,4 @@ def uncertainty_minimization(hmsm):
         p[i] = max(np.exp(-hmsm.tree.get_n_samples(child)/2), eps)
     p = p/np.sum(p)
     p = np.nan_to_num(p)
-    return np.random.choice(children, p=p)
+    return np.random.choice(children, size=n_samples, p=p)

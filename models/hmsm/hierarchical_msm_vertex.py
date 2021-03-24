@@ -428,7 +428,7 @@ class HierarchicalMSMVertex:
             A list of ids of microstates.
         """
         # a sample of n_samples vertices from this msm:
-        sample = self._sample_optimizer(self, n_samples)
+        sample = list(self._sample_optimizer(self, n_samples))
         if self.height == 1:
             return sample
 
@@ -437,7 +437,7 @@ class HierarchicalMSMVertex:
         vertices, counts = np.unique(sample, return_counts=True)
         recursive_sample = []
         for i, vertex in enumerate(vertices):
-            recursive_sample += self.tree.sample_microstate(counts[i], vertex)
+            recursive_sample += self.tree.sample_states(counts[i], vertex)
         return recursive_sample
 
     def sample_from_stationary(self):

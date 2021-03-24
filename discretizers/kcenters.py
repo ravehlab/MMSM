@@ -3,6 +3,7 @@
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 import numpy as np
+from sklearn.neighbors import NearestNeighbors
 from HMSM.util.util import count_dict, get_unique_id
 
 __all__ = ["KCentersDiscretizer"]
@@ -121,7 +122,7 @@ def _k_centers_step(i, data, clusters, centers, distances):
 class KCentersDiscretizer:
     """K-Centers clustering.
 
-    
+
     Parameters
     ----------
     cutoff : float
@@ -172,7 +173,7 @@ class KCentersDiscretizer:
         labels : list of int
             A list of length n_samples, such that labels[i] is the label of the point data[i]
         """
-        n_clusters = self.n_clusters
+        n_clusters = self.n_states
         if self._k_centers_initiated:
             self._nearest_neighbors, clusters, self._centers = extend_k_centers(data, \
                                                                 self._nearest_neighbors, \

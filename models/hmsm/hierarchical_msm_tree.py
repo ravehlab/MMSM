@@ -8,6 +8,7 @@ from msmtools.analysis.dense.stationary_vector import stationary_distribution #T
 from HMSM import base, estimators, HMSMConfig, optimizers
 from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.models.hmsm import HierarchicalMSMVertex
+from HMSM.models.hmsm.util import max_fractional_difference
 
 
 class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
@@ -331,7 +332,7 @@ class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
         if set(self._last_update_sent[microstate][0])!=set(self._microstate_transitions[microstate][0]):
             return True
 
-        max_change_factor = util.max_fractional_difference(self._last_update_sent[microstate], \
+        max_change_factor = max_fractional_difference(self._last_update_sent[microstate], \
                                                            self._microstate_transitions[microstate])
         return max_change_factor >= self.config.parent_update_threshold
 

@@ -6,7 +6,7 @@ from abc import ABC
 
 import warnings
 import numpy as np
-from HMSM import HMSMConfig
+from HMSM import HMSMConfig, models
 from HMSM.util import util
 from HMSM.base import BaseSampler, BaseDiscretizer
 
@@ -100,7 +100,6 @@ class SelfExpandingHierarchicalMSM(ABC):
     def __init__(self, sampler:BaseSampler, discretizer:BaseDiscretizer,\
                  config:HMSMConfig=None, **config_kwargs):
         self._sampler = sampler
-        self._sampler.set_discretizer(discretizer)
         self._discretizer = discretizer
         if config is None:
             self.config = HMSMConfig(**config_kwargs)
@@ -169,8 +168,8 @@ class SelfExpandingHierarchicalMSM(ABC):
         batch_size = self.batch_size
 
         while not stop_condition(n_samples=n_samples, timescale=timescale):
-            microstates = self._hmsm_tree.sample_microstate(n_samples=self.config.n_microstates)
-            dtrajs = self._sampler.sample_from_microstates(microstates,\
+            microstates = self._hmsm_tree.sample_states(n_samples=self.config.n_microstates)
+            dtrajs = self._sampler.sample_from_states(microstates,\
                                                           self.config.n_samples,\
                                                           self.config.sample_len,
                                                           self.config.base_tau)
