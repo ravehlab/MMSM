@@ -19,7 +19,7 @@ class SelfExpandingHierarchicalMSM(ABC):
 
     Parameters
     ----------
-    tree : HierarchicalMSMTreeBase
+    tree_type : HierarchicalMSMTreeBase
         The type of HMSM tree to use for this model.
     sampler : BaseSampler
         A wrapper for some process that samples sequences from a Markov-chain.
@@ -68,10 +68,9 @@ class SelfExpandingHierarchicalMSM(ABC):
 
     Examples
     --------
-    >>> tree = models.hmsm.HierarchicalMSMTree
     >>> sampler = BrownianDynamicsSampler(force_function, dim=2, dt=2e-15, kT=1)
     >>> discretizer = KCentersCoarseGrain(cutoff=3, dim=2)
-    >>> hmsm = SelfExpandingHierarchicalMSM(tree, sampler, discretizer) 
+    >>> hmsm = SelfExpandingHierarchicalMS(sampler, discretizer) 
 
     sample and update in batches for 1 minute in CPU time:
 
@@ -97,37 +96,40 @@ class SelfExpandingHierarchicalMSM(ABC):
     """
 
 
-    def __init__(self, \
-                 tree, \
-                 sampler, \
-                 discretizer, \
-                 optimizer_type, \
-                 partition_estimator_type='auto', \
-                 partition_estimator=None, \
-                 **config_kwargs):
-        #TODO set default values for discretizer and optimizer. Config adapter.
+    def __init__(self, sampler:BaseSampler, discretizer:BaseDiscretizer,\
+                 config:HMSMConfig=None, **config_kwargs):
         self._sampler = sampler
         self.sampler.set_discretizer(discretizer)
         self._discretizer = discretizer
-        self.config = util.get_default_config()
-        self.config.update(config_kwargs)
-        self._hmsm_tree = tree(self.config)
+        if config is None:
+            self.config = HMSMConfig(**config_kwargs)
+        else:
+            self.config = config
+        self._hmsm_tree = self._init_tree()
         self._n_samples = 0
-        self._effective_timestep_seconds = self._sampler.dt * self.config["base_tau"]
+        self._effective_timestep_seconds = self._sampler.dt * self.config.base_tau
         self._init_sample()
+
+    def _init_tree(self, tree_type, sampling_optimizer_type, partition_estimator):
+        if self.config.tree_type in ('auto', 'single_thread'):
+            tree = models.hmsm.HierarchicalMSMTree(self.config)
+        else:
+            raise NotImplementedError(f"tree_type {self.config.tree_type}, not implemented, only \
+                                        'single_thread' is currently supported.")
+        return tree
 
 
     def _init_sample(self, start_points):
-        dtrajs = self._sampler.get_initial_sample(self.config["n_samples"],\
-                                                  self.config["sample_len"],\
-                                                  self.config["base_tau"])
+        dtrajs = self._sampler.get_initial_sample(self.config.n_samples,\
+                                                  self.config.sample_len,\
+                                                  self.config.base_tau)
         self._hmsm_tree.update_model_from_trajectories(dtrajs)
         self._n_samples += self.batch_size
 
 
     @property
     def batch_size(self):
-        return self.config["n_microstates"] * self.config["n_samples"] * self.config["sample_len"]
+        return self.config.n_microstates * self.config.n_samples * self.config.sample_len
 
     @property
     def timestep_in_seconds(self):
@@ -166,11 +168,11 @@ class SelfExpandingHierarchicalMSM(ABC):
         batch_size = self.batch_size
 
         while not stop_condition(n_samples=n_samples, timescale=timescale):
-            microstates = self._hmsm_tree.sample_microstate(n_samples=self.config["n_microstates"])
+            microstates = self._hmsm_tree.sample_microstate(n_samples=self.config.n_microstates)
             dtrajs = self._sampler.sample_from_microstates(microstates,\
-                                                          self.config["n_samples"],\
-                                                          self.config["sample_len"],
-                                                          self.config["base_tau"])
+                                                          self.config.n_samples,\
+                                                          self.config.sample_len,
+                                                          self.config.base_tau)
             self._hmsm_tree.update_model_from_trajectories(dtrajs)
 
             # some book keeping:
