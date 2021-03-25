@@ -1,23 +1,22 @@
 
-from HMSM import HMSMConfig
-from . import GibbsPartition
 
-def get_metastable_partition(config:HMSMConfig):
-    """get_metastable_partition.
-    Get a metastable partition object derived from MetastablePartition, from parameters of
-    an HMSMConfig object.
+from abc import ABC, abstractmethod
 
-    Parameters
-    ----------
-    config : HMSMConfig
-        config object
+class MetastablePartition(ABC):
 
-    Returns
-    -------
-    partition_estimator : inherits MetastablePartition
-    """
-    if config.partition_estimator in ('auto' or 'Gibbs'):
-        return GibbsPartition(**config.partition_kwargs)
-    else:
-        raise NotImplementedError(f"partition estimator {config.partition_estimator}\
-                                    not implemented, only Gibbs is currently supported")
+    @abstractmethod
+    def check_split_condition(self, *args, **kwargs) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_metastable_partition(self, *args, **kwargs):
+        """get_metastable_partition.
+
+        Returns
+        -------
+        partition : List[Iterable]        
+            A partition of states.
+        taus : List[int]
+            The taus (timestep resolutions) of each element of the partition.
+        """
+        raise NotImplementedError()

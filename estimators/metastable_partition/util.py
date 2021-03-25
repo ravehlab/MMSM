@@ -2,6 +2,8 @@
 import numpy as np
 from sklearn.cluster import KMeans
 from HMSM.util.linalg import normalize_rows, normalized_laplacian
+from HMSM import HMSMConfig
+from . import GibbsPartition
 
 def spectral(P, k, eig=None, return_eig=False):
     """
@@ -39,3 +41,23 @@ def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
         #TODO max_timescale should depend on parents timescale
         return hmsm.timescale/hmsm.tau > max_timescale or hmsm.n > max_size
     return _split_condition
+
+def get_metastable_partition(config:HMSMConfig):
+    """get_metastable_partition.
+    Get a metastable partition object derived from MetastablePartition, from parameters of
+    an HMSMConfig object.
+
+    Parameters
+    ----------
+    config : HMSMConfig
+        config object
+
+    Returns
+    -------
+    partition_estimator : inherits MetastablePartition
+    """
+    if config.partition_estimator in ('auto' or 'Gibbs'):
+        return GibbsPartition(**config.partition_kwargs)
+    else:
+        raise NotImplementedError(f"partition estimator {config.partition_estimator}\
+                                    not implemented, only Gibbs is currently supported")
