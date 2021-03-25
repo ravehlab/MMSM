@@ -5,6 +5,7 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from HMSM.util.util import count_dict, get_unique_id
+from HMSM.discretizers import BaseDiscretizer
 
 __all__ = ["KCentersDiscretizer"]
 
@@ -119,7 +120,7 @@ def _k_centers_step(i, data, clusters, centers, distances):
     clusters[updated_points] = i
     distances[updated_points] = dist_to_new_center[updated_points]
 
-class KCentersDiscretizer:
+class KCentersDiscretizer(BaseDiscretizer):
     """K-Centers clustering.
 
 

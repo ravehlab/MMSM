@@ -97,7 +97,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     """
 
 
-    def __init__(self, sampler:BaseSampler, discretizer:BaseDiscretizer,\
+    def __init__(self, sampler:BaseSampler, discretizer:BaseDiscretizer,
                  config:HMSMConfig=None, **config_kwargs):
         self._sampler = sampler
         self._discretizer = discretizer
@@ -120,8 +120,8 @@ class SelfExpandingHierarchicalMSM(ABC):
 
 
     def _init_sample(self):
-        dtrajs = self._sampler.get_initial_sample(self.config.n_samples,\
-                                                  self.config.sample_len,\
+        dtrajs = self._sampler.get_initial_sample(self.config.n_samples,
+                                                  self.config.sample_len,
                                                   self.config.base_tau)
         self._hmsm_tree.update_model_from_trajectories(dtrajs)
         self._n_samples += self.batch_size
@@ -169,8 +169,8 @@ class SelfExpandingHierarchicalMSM(ABC):
 
         while not stop_condition(n_samples=n_samples, timescale=timescale):
             microstates = self._hmsm_tree.sample_states(n_samples=self.config.n_microstates)
-            dtrajs = self._sampler.sample_from_states(microstates,\
-                                                          self.config.n_samples,\
+            dtrajs = self._sampler.sample_from_states(microstates,
+                                                          self.config.n_samples,
                                                           self.config.sample_len,
                                                           self.config.base_tau)
             self._hmsm_tree.update_model_from_trajectories(dtrajs)

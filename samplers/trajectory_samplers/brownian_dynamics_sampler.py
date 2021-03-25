@@ -3,11 +3,11 @@
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 import numpy as np
-from HMSM import base
+from HMSM.samplers.trajectory_samplers import BaseTrajectorySampler
 
 __all__ = ["BrownianDynamicsSampler"]
 
-class BrownianDynamicsSampler(base.BaseSampler):
+class BrownianDynamicsSampler(BaseTrajectorySampler):
     #TODO: documentation
 
     def __init__(self, force, dim, dt, kT, start_points=None, *args, **kwargs):

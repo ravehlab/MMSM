@@ -1,10 +1,10 @@
-"""Base class for all Samplers"""
+"""Base class for all Trajectory Samplers"""
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 from abc import ABC, abstractmethod
 
-class BaseSampler(ABC):
+class BaseTrajectorySampler(ABC):
 
     def __init__(self, discretizer):
         self._discretizer = discretizer
