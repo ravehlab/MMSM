@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
-from HMSM.models.hmsm.util import get_parent_update_condition
+from HMSM.models.serial.util import get_parent_update_condition
 
 
 class HierarchicalMSMVertex:
@@ -84,7 +84,7 @@ class HierarchicalMSMVertex:
     UPDATE_PARENT = "UPDATE_PARENT"
     SUCCESS = "SUCCESS"
 
-    def __init__(self, tree, children, parent, tau, height, partition_estimator, sample_optimizer, config):
+    def __init__(self, tree, children, parent, tau, height, partition_estimator, vertex_sampler, config):
         self.__id = util.get_unique_id()
         self.tree = tree
         self._children = set(children)
@@ -95,7 +95,7 @@ class HierarchicalMSMVertex:
         self.tau = tau #TODO: maybe this should be calculated locally, not given as a parameter?
         self.height = height
         self._partition_estimator = partition_estimator
-        self._sample_optimizer = sample_optimizer
+        self._vertex_sampler = vertex_sampler
         self._neighbors = []
         self._parent_update_condition = get_parent_update_condition(config.parent_update_condition,\
                                                                     config.parent_update_threshold)
@@ -428,7 +428,7 @@ class HierarchicalMSMVertex:
             A list of ids of microstates.
         """
         # a sample of n_samples vertices from this msm:
-        sample = list(self._sample_optimizer(self, n_samples))
+        sample = list(self._vertex_sampler(self, n_samples))
         if self.height == 1:
             return sample
 

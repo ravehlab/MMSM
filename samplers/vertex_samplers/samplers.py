@@ -2,13 +2,13 @@
 import numpy as np
 from HMSM import HMSMConfig
 
-def get_optimizer(config:HMSMConfig):
-    if config.sampling_optimizer in ("auto", "uncertainty_minimization"):
+def get_vertex_sampler(config:HMSMConfig):
+    if config.vertex_sampler in ("auto", "uncertainty_minimization"):
         return uncertainty_minimization
-    elif config.sampling_optimizer == "uniform":
+    elif config.vertex_sampler == "uniform":
         return uniform_sample
     else:
-        raise NotImplementedError(f"Optimizer {config.sampling_optimizer} not implemented.")
+        raise NotImplementedError(f"Optimizer {config.vertex_sampler} not implemented.")
 
 def uniform_sample(hmsm, n_samples):
     """Samples one of this vertices children uniformly.

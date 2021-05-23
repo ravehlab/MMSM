@@ -5,13 +5,14 @@
 from collections import defaultdict
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution #TODO include this function in package
-from HMSM import base, estimators, HMSMConfig, optimizers
+from HMSM import estimators, HMSMConfig, samplers
 from HMSM.util import util, UniquePriorityQueue, linalg
-from HMSM.models.hmsm import HierarchicalMSMVertex
-from HMSM.models.hmsm.util import max_fractional_difference
+from HMSM.models import BaseHierarchicalMSMTree
+from . import HierarchicalMSMVertex
+from .util import max_fractional_difference
 
 
-class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
+class HierarchicalMSMTree(BaseHierarchicalMSMTree):
     """HierarchicalMSMTree.
     This class encapsulates the HMSM data structure, and provides an interface for it.
     The vertices of the tree are HierarchicalMSMVertex objects, which can be accessed from this
@@ -45,7 +46,7 @@ class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
     def __init__(self, config:HMSMConfig):
         self.config = config
         self._partition_estimator = estimators.metastable_partition.get_metastable_partition(config)
-        self._sample_optimizer = optimizers.get_optimizer(config)
+        self._vertex_sampler = samplers.vertex_samplers.get_vertex_sampler(config)
         self._microstate_parents = dict()
         self._microstate_counts = util.count_dict(depth=2)
         self._microstate_transitions = dict()
@@ -81,7 +82,7 @@ class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
                                            tau=1,\
                                            height=1,
                                            partition_estimator=self._partition_estimator,\
-                                           sample_optimizer=self._sample_optimizer,\
+                                           vertex_sampler=self._vertex_sampler,\
                                            config=self.config)
         self._add_vertex(root)
         self._root = root.id
@@ -358,7 +359,7 @@ class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
             vertex = HierarchicalMSMVertex(self, subset, parent, \
                                            taus[i], split_vertex.height, \
                                            partition_estimator=self._partition_estimator,\
-                                           sample_optimizer=self._sample_optimizer,\
+                                           vertex_sampler=self._vertex_sampler,\
                                            config=self.config)
             self._add_vertex(vertex)
             self._connect_to_new_parent(subset, vertex.id)
@@ -549,7 +550,7 @@ class HierarchicalMSMTree(base.BaseHierarchicalMSMTree):
             the id of the sampled vertex
         """
         sample = vertex
-        while self.vertices[sample].height > level:
+        for _ in range(self.vertices[sample].height - level):
             sample = self.vertices[sample].sample_from_stationary()
         return sample
 

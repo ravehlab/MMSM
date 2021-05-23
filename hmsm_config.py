@@ -35,8 +35,8 @@ class HMSMConfig:
     alpha: int=1
     parent_update_condition: str='auto'
     parent_update_threshold: float=0.1
-    sampling_optimizer: str='auto'
-    sampling_optimizer_kwargs: dict=field(default_factory=dict)
+    vertex_sampler: str='auto'
+    vertex_sampler_kwargs: dict=field(default_factory=dict)
     partition_estimator: str='auto'
     partition_kwargs: dict=field(default_factory=dict)
     transition_estimator: str='Dirichlet_MMSE'

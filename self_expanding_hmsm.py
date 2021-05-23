@@ -8,7 +8,8 @@ import warnings
 import numpy as np
 from HMSM import HMSMConfig, models
 from HMSM.util import util
-from HMSM.base import BaseSampler, BaseDiscretizer
+from HMSM.samplers.trajectory_samplers import BaseTrajectorySampler
+from HMSM.discretizers import BaseDiscretizer
 
 class SelfExpandingHierarchicalMSM(ABC):
     """SelfExpandingHierarchicalMSM
@@ -22,7 +23,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     ----------
     tree_type : HierarchicalMSMTreeBase
         The type of HMSM tree to use for this model.
-    sampler : BaseSampler
+    sampler : BaseTrajectorySampler
         A wrapper for some process that samples sequences from a Markov-chain.
     discretizer : BaseDiscretizer
 
@@ -97,7 +98,7 @@ class SelfExpandingHierarchicalMSM(ABC):
     """
 
 
-    def __init__(self, sampler:BaseSampler, discretizer:BaseDiscretizer,
+    def __init__(self, sampler:BaseTrajectorySampler, discretizer:BaseDiscretizer,
                  config:HMSMConfig=None, **config_kwargs):
         self._sampler = sampler
         self._discretizer = discretizer
@@ -111,11 +112,11 @@ class SelfExpandingHierarchicalMSM(ABC):
         self._init_sample()
 
     def _init_tree(self):
-        if self.config.tree_type in ('auto', 'single_thread'):
-            tree = models.hmsm.HierarchicalMSMTree(self.config)
+        if self.config.tree_type in ('auto', 'serial'):
+            tree = models.serial.HierarchicalMSMTree(self.config)
         else:
             raise NotImplementedError(f"tree_type {self.config.tree_type}, not implemented, only \
-                                        'single_thread' is currently supported.")
+                                        'serial' is currently supported.")
         return tree
 
 

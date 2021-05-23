@@ -1,2 +1,2 @@
-from .metastable_partition import *
-from .transitions import *
+from . import metastable_partition
+from . import transitions

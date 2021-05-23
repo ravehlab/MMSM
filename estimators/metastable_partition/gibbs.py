@@ -3,13 +3,13 @@
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 import numpy as np
-from HMSM import base
 from HMSM.util.linalg import normalize_rows
 from .util import get_size_or_timescale_split_condition, spectral
+from . import MetastablePartition
 
 __all__ = ['GibbsPartition']
 
-class GibbsPartition(base.MetastablePartition):
+class GibbsPartition(MetastablePartition):
 
     def __init__(self, max_k_method='default', transition_parameter=0.75, \
                  max_size=2048, max_timescale=64):

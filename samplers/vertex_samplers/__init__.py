@@ -1,1 +1,1 @@
-from .sampling import get_optimizer
+from .samplers import get_vertex_sampler
