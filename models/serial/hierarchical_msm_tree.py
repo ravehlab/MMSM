@@ -508,6 +508,10 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         -------
         T : ndarray
             Transition matrix.
+        level : list of int
+            A list of vertex ids, such that T[i,j] is the transition probability from vertex[i] to 
+            vertex[j] in tau time.
+            In other words, the i'th row and column of T correspond to the vertex with id level[i].
         """
         level = self.get_level(level)
 
@@ -520,6 +524,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             level = level_by_parents
 
         n = len(level)
+        index_2_id = dict(zip(range(n), level))
         id_2_index = dict(zip(level, range(n)))
         T = np.zeros((n,n))
         for vertex in level:
@@ -531,7 +536,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         linalg._assert_stochastic(T)
         if return_order:
             return np.linalg.matrix_power(T, tau), level
-        return np.linalg.matrix_power(T, tau)
+        return np.linalg.matrix_power(T, tau), level
 
     def sample_from_stationary(self, vertex, level=0):
         """sample_from_stationary.
