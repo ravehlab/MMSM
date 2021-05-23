@@ -103,6 +103,8 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
 
     def get_level(self, level):
         assert level <= self.height
+        if level==0:
+            return list(self._microstate_parents.keys())
         return self._levels[level].copy()
 
     def get_parent(self, child_id):
@@ -265,18 +267,17 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         """
         n = len(self._microstate_parents)
         T = np.zeros((n,n))
-        id_2_index = dict()
-        for i, microstate_id in enumerate(self._microstate_parents.keys()):
-            id_2_index[microstate_id] = i
-        for src, (ids, row) in self._microstate_transitions.items():
-            i = id_2_index[src]
+        level = self.get_level(0)
+        for i, src in enumerate(level):
+            ids, row = self._microstate_transitions[src]
             for id, transition_probability in zip(ids, row):
                 assert transition_probability >= 0
-                j = id_2_index[id]
+                j = level.index(id)
                 T[i,j] = transition_probability
-        return T, id_2_index
 
-    def get_full_stationary_distribution(self):
+        return T, level
+
+    def get_full_stationary_distribution(self, return_indices=False):
         """get_full_stationary_distribution.
         Get the stationary distribution over all microstates.
 
@@ -285,10 +286,10 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         pi : dict
             A dictionary mapping microstate ids to their stationary distribution.
         """
-        T, id_2_index = self.get_full_T()
+        T, level = self.get_full_T()
         st = stationary_distribution(T)
         pi = {}
-        for id, index in id_2_index.items():
+        for index, id in enumerate(level):
             pi[id] = st[index]
         return pi
 
