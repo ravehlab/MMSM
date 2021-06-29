@@ -30,7 +30,7 @@ def induced_distribution(hmsm, descendant_level, parent_level):
         assert np.isclose(np.sum(pi), 1.0) , np.sum(pi)
     return pi, ids
 
-def DKL(p, q):
+def D_KL(p, q):
     assert p.shape==q.shape
     assert p.ndim==q.ndim==1
     return np.sum(np.fromiter(map(rel_entr, p, q), dtype=np.double))

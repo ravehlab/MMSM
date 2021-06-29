@@ -3,27 +3,41 @@ from msmtools.analysis.dense.stationary_vector import stationary_distribution
 from .util import *
 
 
-def boltzmann_test(hmsm, discretizer, boltzmann_distribution):
+def boltzmann_test(hmsm, level, discretizer, energy, kT, n_samples=15):
     """boltzmann_test.
     Get the KL-divergence between the stationary distribution on states on a given level and the 
     Boltzmann distribution on those states, conditioned on being in one of the states covered by
     the HMSM.
-    
+
     Parameters
     ----------
     hmsm :
         hmsm
+    level :
+        level
     discretizer :
         discretizer
-    boltzmann_distribution :
-        boltzmann_distribution
+    energy : callable
+        energy function R^d -> R
+    kT : float
+        kT
+    n_samples : int
+        number of samples used to estimate the free energy of each microstate
 
     Returns
-    -------
-    kl_divergence : float
-        
-    """
-    pass
+    -------"""
+    pi, ids = induced_distribution(hmsm, 0, level)
+
+    discrete_free_energy = np.ndarray(pi.shape)
+    for i, id in enumerate(ids):
+        discrete_free_energy[i] = \
+                np.mean([energy(discretizer.sample_from(id)) for i in range(n_samples)])
+    boltzmann = np.exp(-discrete_free_energy/kT)
+    boltzmann *= (1/np.sum(boltzmann))
+    return D_KL(boltzmann, pi)
+
+    
+
 
 def discretization_error(hmsm, descendant_level, parent_level):
     """discretization_error.
@@ -69,8 +83,6 @@ def discretization_error(hmsm, descendant_level, parent_level):
     induced_pi, ids = induced_distribution(hmsm, descendant_level, parent_level)
     induced_pi = induced_pi[np.argsort(ids)]
 
-    return DKL(pi, induced_pi)
-
-
+    return D_KL(pi, induced_pi)
 
 
