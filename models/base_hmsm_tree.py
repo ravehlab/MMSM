@@ -3,6 +3,7 @@
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 from abc import ABC, abstractmethod
+from HMSM import HMSMConfig
 
 class BaseHierarchicalMSMTree(ABC):
     """HierarchicalMSMTree.
@@ -10,7 +11,7 @@ class BaseHierarchicalMSMTree(ABC):
 
     Parameters
     ----------
-    config : dict
+    config : 
         A dictionary of model parameters, here is a list of parameters used by the model:
             n_states: int
                 How many states to sample from in a single batch of samples
@@ -41,6 +42,8 @@ class BaseHierarchicalMSMTree(ABC):
                 prior for transition probabilities.
     """
 
+    def __init__(self, config:HMSMConfig):
+        self.config = config
 
     @abstractmethod
     def update_model_from_trajectories(self, dtrajs):

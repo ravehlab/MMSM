@@ -141,6 +141,7 @@ class SelfExpandingHierarchicalMSM(ABC):
         return self._hmsm_tree
 
     def get_timescale(self):
+        #TODO document or eliminate
         return self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
 
     def expand(self, max_cputime=np.inf, max_samples=np.inf, min_timescale_sec=np.inf):
@@ -158,6 +159,7 @@ class SelfExpandingHierarchicalMSM(ABC):
         """
 
         if max_cputime == max_samples == min_timescale_sec == np.inf:
+            # TODO: throw exception instead
             warnings.warn("At least one of the parameters max_cputime, max_samples, or \
                               min_timescale_sec must be given")
             return
