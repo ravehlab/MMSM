@@ -34,3 +34,34 @@ def D_KL(p, q):
     assert p.shape==q.shape
     assert p.ndim==q.ndim==1
     return np.sum(np.fromiter(map(rel_entr, p, q), dtype=np.double))
+
+def mean_hitting_time(T, i):
+    """mean_hitting_time.
+    Gets the mean hitting time from all nodes to node i.
+
+    Parameters
+    ----------
+    T : ndarray
+        Transition matrix of shape (_,n,n)
+    i : int
+        Index of the node
+
+    Returns
+    -------
+    x : ndarray
+        An array of shape (_,n), such that x[_,j] is the mean hitting time of i from j.
+    """
+    n = T.shape[1]
+    T_i = T - np.eye(n)
+    if T.ndim == 3:
+        nsamples = T.shape[0]
+        T_i[:,i] = np.zeros(n)
+        T_i[:,i,i] = 1
+        b = -np.ones((nsamples, n))
+        b[:,i] = 0
+    else:
+        T_i[i] = np.zeros(n)
+        T_i[i,i] = 1
+        b = -np.ones(n)
+        b[i] = 0
+    return np.linalg.solve(T_i, b)

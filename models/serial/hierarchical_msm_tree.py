@@ -44,7 +44,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
 
 
     def __init__(self, config:HMSMConfig):
-        self.config = config
+        super().__init__(config)
         self._partition_estimator = estimators.metastable_partition.get_metastable_partition(config)
         self._vertex_sampler = samplers.vertex_samplers.get_vertex_sampler(config)
         self._microstate_parents = dict()
@@ -224,6 +224,8 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             for vertex_id in updated_microstates:
                 self._microstate_transitions[vertex_id] = estimators.transitions.dirichlet_MMSE(\
                                                   self._microstate_counts[vertex_id], self.alpha)
+        else:
+            raise ValueError("Only Dirchlet_MMSE transition estimator is currently implemented")
 
         # update the vertices of the tree from the leaves upwards
         for vertex_id in updated_microstates:
@@ -253,6 +255,18 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._connect_to_new_parent(self._microstate_parents.keys(), self.root)
         self.force_update_all()
 
+    def sample_full_T(self, nsamples):
+        n = len(self._microstate_parents)
+        T = np.zeros((nsamples,n,n))
+        level = self.get_level(0)
+        for i, src in enumerate(level):
+            ids, row = self._microstate_transitions[src]
+
+            neighbor_ids = self._microstate_counts[src].keys()
+            neighbor_indices = [level.index(id) for id in neighbor_ids]
+            counts = np.fromiter(self._microstate_counts[src].values(), dtype=float)
+            T[:,i,neighbor_indices] = np.random.dirichlet(counts + self.alpha, nsamples)
+        return T, level
 
     def get_full_T(self):
         """get_full_T.
@@ -624,6 +638,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
     def sample_states(self, n_samples, vertex_id=None):
         """sample_states.
         """
+        #TODO match base class signature
         if vertex_id is None:
             vertex_id = self.root
         return self.vertices[vertex_id].sample_microstate(n_samples)
