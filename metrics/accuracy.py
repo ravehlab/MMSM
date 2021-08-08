@@ -88,5 +88,7 @@ def discretization_error(hmsm, descendant_level, parent_level):
 def MHT_uncertainty(tree, nsamples=100, sink=0):
     T_samples, ids = tree.sample_full_T(nsamples)
     mht = mean_hitting_time(T_samples, sink)
-    return ids, np.var(mht, axis=0)
+    var = np.var(mht, axis=0)
+    mean = np.mean(mht, axis=0)
+    return ids, np.nan_to_num(var/mean, copy=False)
 

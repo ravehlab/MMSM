@@ -140,6 +140,10 @@ class SelfExpandingHierarchicalMSM(ABC):
     def tree(self):
         return self._hmsm_tree
 
+    @property
+    def discretizer(self):
+        return self._discretizer
+
     def get_timescale(self):
         #TODO document or eliminate
         return self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds

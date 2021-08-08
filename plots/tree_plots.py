@@ -6,8 +6,6 @@ from HMSM.tests.force_functions.two_dimensional import neg
 import graph_tool.all as gt
 import graph_tool.draw as draw
 
-#plt.switch_backend('cairo')
-
 def in_notebook():
     return 'ipykernel' in sys.modules
 
@@ -31,6 +29,7 @@ def int_to_rgb(num, string=False):
     return c
 
 def plot_level_graph(tree, level, force, cg, ax=None, loc_2d=True, contour=None):
+    #TODO clean up and document this mess of a function
     if ax is None:
         fig, ax = plt.subplots(1,1, figsize=(10,10))
     node_ids = tree.get_level(level)
@@ -125,10 +124,11 @@ def plot_tree(cg, tree, force, lim=7):
         raise Exception("set pyplot backend to cairo to use plot_tree")
 
     h = tree.height
-    fig, ax = plt.subplots(h-1,1, figsize=(10,10*(h)))
     if h==1:
+        fig, ax = plt.subplots(1,1, figsize=(10,10*(h)))
         plot_level(cg, tree, 1, ax)
         return
+    fig, ax = plt.subplots(h-1,1, figsize=(10,10*(h)))
     xlim = (-lim,lim)
     ylim = (-lim,lim)
     heatmap = integrate_2d(neg(force), xlim, ylim, 0.1)
