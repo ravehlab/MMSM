@@ -4,18 +4,18 @@
 
 from abc import ABC, abstractmethod
 import numpy as np
+from HMSM.util.util import count_dict
 
 class BaseDiscretizer(ABC):
     """BaseDiscretizer.
     Base class for coarse graining of continuous spaces into discrete states.
     """
+    def __init__(self, representative_sample_size=10):
+        self._representative_sample_size = representative_sample_size
+        self._representatives = dict()
+        self._cluster_count = count_dict()
 
-    @property
-    @abstractmethod
-    def n_states(self):
-        pass
 
-    @abstractmethod
     def get_coarse_grained_states(self, data : np.ndarray):
         """Get the state ids of data points.
 
@@ -29,20 +29,85 @@ class BaseDiscretizer(ABC):
         labels : list of int
             A list of length n_samples, such that labels[i] is the label of the point data[i]
         """
-        pass
+        clusters = self._coarse_grain_states(data)
+        self._sample_representatives(clusters, data)
+        return clusters
+        
 
-    @abstractmethod
-    def sample_from(self, state_id):
-        """Get a sample representative from a given state.
+    def sample_from(self, cluster_id):
+        """Get a sample representative from a given cluster.
+        The sample returned will be one of the points previously labeled as cluster_id, such that
+        the probability of each point that was seen from this cluster_id to be sampled is 1/n,
+        where n is the number of points from this cluster that were observed.
 
         Parameters
         ----------
-        state_id : int
-            The id of the state to sample a representative from.
+        cluster_id : int
+            The id of the cluster to sample from
 
         Returns
         -------
         x : np.ndarray of shape (n_features)
             The sampled point
+
+        Notes
+        -----
+        While the distribution of each individual sample is uniform over all seen samples apriori,
+        the distribution of more than one sample is not uniform. This is because a finite set of
+        representatives is kept from each cluster.
+        The greater the parameter representative_sample_size is, the closer this distribution is
+        to uniform.
+        """
+        random_index = np.random.randint(len(self._representatives[cluster_id]))
+        return self._representatives[cluster_id][random_index]
+
+    def _sample_representatives(self, cluster_ids, data):
+        """
+        Keep representative samples for each cluster, such that the probability of a representative
+        x from cluster j being sampled (when sampling from the representatives) is 1/n, where n is
+        the number of points x' that have been observed in j.
+
+        Parameters
+        ----------
+        cluster_ids : Iterable[int]
+            The cluster ids of the data points
+        data : np.ndarray of shape (n_samples, n_features)
+            The clustered data points 
+        """
+        for i, cluster_id in enumerate(cluster_ids):
+            self._cluster_count[cluster_id] += 1
+            if not self._representatives.get(cluster_id):
+                # If this is the first observation of this cluster
+                self._representatives[cluster_id] = [data[i]]
+
+            sample_probability = self._representative_sample_size/self._cluster_count[cluster_id]
+            if np.random.random() < sample_probability:
+                # with probability r/n, keep this point. It can be seen by induction
+                # that this gives the desired property (where r is the number of representatives).
+                if self._cluster_count[cluster_id] < self._representative_sample_size:
+                    self._representatives[cluster_id].append(data[i])
+                else:
+                    random_index = np.random.choice(self._representative_sample_size)
+                    self._representatives[cluster_id][random_index] = data[i]
+
+
+    @property
+    @abstractmethod
+    def n_states(self):
+        pass
+
+    @abstractmethod
+    def _coarse_grain_states(self, data : np.ndarray):
+        """_coarse_grain_states.
+
+        Parameters
+        ----------
+        data : np.ndarray((N,d))
+            a set of N datapoints with dimension d
+
+        Returns
+        -------
+        clusters : np.ndarray(N, dtype=np.int)
+            the cluster assignments of the datapoints
         """
         pass

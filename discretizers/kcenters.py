@@ -4,7 +4,7 @@
 
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from HMSM.util.util import count_dict, get_unique_id
+from HMSM.util.util import get_unique_id
 from HMSM.discretizers import BaseDiscretizer
 
 __all__ = ["KCentersDiscretizer"]
@@ -137,16 +137,13 @@ class KCentersDiscretizer(BaseDiscretizer):
     """
 
     def __init__(self, cutoff, representative_sample_size=10):
+        super().__init__(representative_sample_size)
         self._centers = []
         self._nearest_neighbors = None
         self._k_centers_initiated = False
         self._cluster_inx_2_id = dict()
         self._id_2_cluster_inx = dict()
 
-        self._representative_sample_size = representative_sample_size
-        self._representatives = dict()
-
-        self._cluster_count = count_dict()
         self.cutoff = cutoff
 
     @property
@@ -161,7 +158,7 @@ class KCentersDiscretizer(BaseDiscretizer):
         indices = np.array([self._id_2_cluster_inx[id] for id in ids], dtype=int)
         return self.centers[indices]
 
-    def get_coarse_grained_states(self, data : np.ndarray):
+    def _coarse_grain_states(self, data : np.ndarray):
         """Get the cluster ids of data points.
 
         Parameters
@@ -174,7 +171,7 @@ class KCentersDiscretizer(BaseDiscretizer):
         labels : list of int
             A list of length n_samples, such that labels[i] is the label of the point data[i]
         """
-        n_clusters = self.n_states
+        max_cluster_id = self.n_states-1
         if self._k_centers_initiated:
             self._nearest_neighbors, clusters, self._centers = extend_k_centers(data, \
                                                                 self._nearest_neighbors, \
@@ -183,41 +180,13 @@ class KCentersDiscretizer(BaseDiscretizer):
             self._nearest_neighbors, clusters, self._centers = k_centers(data, cutoff=self.cutoff)
             self._k_centers_initiated = True
 
-        if np.max(clusters) > n_clusters-1:
+        if np.max(clusters) > max_cluster_id:
             new_clusters = np.unique(clusters)
-            new_clusters = new_clusters[np.where(new_clusters > (n_clusters-1))]
+            new_clusters = new_clusters[np.where(new_clusters > (max_cluster_id))]
             self._add_clusters(new_clusters)
-
-        self._sample_representatives(clusters, data)
 
         return self._get_ids(clusters)
 
-    def sample_from(self, cluster_id):
-        """Get a sample representative from a given cluster.
-        The sample returned will be one of the points previously labeled as cluster_id, such that
-        the probability of each point that was seen from this cluster_id to be sampled is 1/n,
-        where n is the number of points from this cluster that were observed.
-
-        Parameters
-        ----------
-        cluster_id : int
-            The id of the cluster to sample from
-
-        Returns
-        -------
-        x : np.ndarray of shape (n_features)
-            The sampled point
-
-        Notes
-        -----
-        While the distribution of each individual sample is uniform over all seen samples apriori,
-        the distribution of more than one sample is not uniform. This is because a finite set of
-        representatives is kept from each cluster.
-        The greater the parameter representative_sample_size is, the closer this distribution is
-        to uniform.
-        """
-        random_index = np.random.randint(len(self._representatives[cluster_id]))
-        return self._representatives[cluster_id][random_index]
 
 
     def _get_ids(self, cluster_indices):
@@ -231,25 +200,3 @@ class KCentersDiscretizer(BaseDiscretizer):
             self._cluster_inx_2_id[cluster] = uid
             self._id_2_cluster_inx[uid] = cluster
 
-    def _sample_representatives(self, clusters, data):
-        """
-        Keep representative samples for each cluster, such that the probability of a representative
-        x from cluster j being sampled (when sampling from the representatives) is 1/n, where n is
-        the number of points x' that have been observed in j.
-        """
-        for i, cluster_index in enumerate(clusters):
-            cluster_id = self._cluster_inx_2_id[cluster_index]
-            self._cluster_count[cluster_id] += 1
-            if not self._representatives.get(cluster_id):
-                # If this is the first observation of this cluster
-                self._representatives[cluster_id] = [data[i]]
-
-            sample_probability = self._representative_sample_size/self._cluster_count[cluster_id]
-            if np.random.random() < sample_probability:
-                # with probability r/n, keep this point. It can be proven by induction
-                # that this gives the desired property (where r is the number of representatives).
-                if self._cluster_count[cluster_id] < self._representative_sample_size:
-                    self._representatives[cluster_id].append(data[i])
-                else:
-                    random_index = np.random.choice(self._representative_sample_size)
-                    self._representatives[cluster_id][random_index] = data[i]
