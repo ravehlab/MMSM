@@ -107,7 +107,13 @@ class BaseDiscretizer(ABC):
 
         Returns
         -------
-        clusters : np.ndarray(N, dtype=np.int)
-            the cluster assignments of the datapoints
+        labels : list of int
+            A list of length n_samples, such that labels[i] is the label of the point data[i]
+        """
+        pass
+
+    @abstractmethod
+    def get_centers_by_ids(self, cluster_ids):
+        """Get cluster centers of the given cluster ids.
         """
         pass
