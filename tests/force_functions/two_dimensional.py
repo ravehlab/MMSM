@@ -9,5 +9,5 @@ def neg(func):
 
 def concentric(x):
     freq = np.pi/2
-    mag = 2.5
+    mag = 3.#2.5
     return +2*np.sin(x*np.pi*1.5) - circular_wave(x, freq, mag) - x/5
