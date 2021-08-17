@@ -28,7 +28,7 @@ def signed_pair(x : int,y : int) -> int:
     """
     x_sign = 1 if x >= 0 else -1
     y_sign = 0 if y >= 0 else 1
-    return elpair(x,y)*2*x_sign + y_sign
+    return elpair(abs(x),abs(y))*2*x_sign + y_sign
 
 @functools.lru_cache(maxsize=256)
 def signed_unpair(z : int) -> (int, int):
