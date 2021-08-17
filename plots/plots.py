@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+from matplotlib import pyplot as plt
 from scipy import integrate
 
 def integrate_2d(force, xlim, ylim, resolution):
@@ -63,10 +65,32 @@ def map_2d(free_energy, xlim, ylim, resolution):
         Z[i, j] = free_energy(coords[i, j])
     return X, Y, Z
 
+def plot_states_by_values(state_values, discretizer, ax=None, log=True, **kwargs):
+    """plot_states_by_values.
 
-def plot_distribution(cg, p, ax=None, **kwargs):
-    x = cg.get_centers_by_ids(p.keys())
-    c = np.log(list(p.values()))
+    Parameters
+    ----------
+    state_values : dict
+        A dictionary mapping state ids (int) to values (float or int)
+    discretizer : BaseDiscretizer
+        The discretizer the state ids come from
+    ax : matplotlib.Axes
+        The axes on which to make the plot.
+    log : bool
+        If true, the colors will be in logscale.
+    kwargs : dict
+        Any kwargs for ax.scatter.
+    """
+    states_centers = discretizer.get_centers_by_ids(state_values.keys())
+    c = list(state_values.values())
+    norm = matplotlib.colors.LogNorm() if log else None
     if ax is None:
         ax = plt.gca()
-    return ax.scatter(*x.T, c=c, **kwargs)
+    return ax.scatter(*states_centers.T, c=c, norm=norm, **kwargs)
+
+def plot_timescales(hmsm, level, discretizer, ax=None):
+    # first get all the states on the given level, and plot them
+    # color each state by the timescale spent in that state 
+    # make colorbar
+    pass
+
