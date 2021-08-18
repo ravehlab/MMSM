@@ -1,6 +1,8 @@
 import numpy as np
+import matplotlib.mlab as ml
 import matplotlib
 from matplotlib import pyplot as plt
+from scipy.interpolate import griddata
 from scipy import integrate
 
 def integrate_2d(force, xlim, ylim, resolution):
@@ -65,7 +67,7 @@ def map_2d(free_energy, xlim, ylim, resolution):
         Z[i, j] = free_energy(coords[i, j])
     return X, Y, Z
 
-def plot_states_by_values(state_values, discretizer, ax=None, log=True, **kwargs):
+def plot_states_by_values(state_values, discretizer, ax=None, log=True, contour=True, **kwargs):
     """plot_states_by_values.
 
     Parameters
@@ -86,6 +88,10 @@ def plot_states_by_values(state_values, discretizer, ax=None, log=True, **kwargs
     norm = matplotlib.colors.LogNorm() if log else None
     if ax is None:
         ax = plt.gca()
+    if contour:
+        tri = matplotlib.tri.Triangulation(*states_centers.T)
+        #ax.tricontour(tri, np.array(c), colors='k')
+        return ax.tricontourf(tri, np.array(c), norm=norm, **kwargs)
     return ax.scatter(*states_centers.T, c=c, norm=norm, **kwargs)
 
 def plot_timescales(hmsm, level, discretizer, ax=None):
