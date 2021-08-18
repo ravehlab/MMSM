@@ -35,6 +35,11 @@ def D_KL(p, q):
     assert p.ndim==q.ndim==1
     return np.sum(np.fromiter(map(rel_entr, p, q), dtype=np.double))
 
+def chi_squared_distance(p,q):
+    elements = np.power(p-q,2)/(p+q)
+    elements = np.nan_to_num(elements)
+    return np.sum(elements)/2
+
 def mean_hitting_time(T, i):
     """mean_hitting_time.
     Gets the mean hitting time from all nodes to node i.

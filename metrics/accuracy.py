@@ -1,6 +1,6 @@
 import numpy as np
 from msmtools.analysis.dense.stationary_vector import stationary_distribution
-from .util import D_KL, induced_distribution, mean_hitting_time
+from .util import D_KL, induced_distribution, mean_hitting_time, chi_squared_distance
 
 
 def boltzmann_test(hmsm, level, discretizer, energy, kT, n_samples=15):
@@ -119,8 +119,7 @@ def kinetic_error(base_T, base_ids, est_T, est_ids) -> dict:
     n = base_T.shape[0]
     k = est_T.shape[0]
     # map from indices of est_T/ids to corresponding indices of base_T/ids:
-    est_inx_2_base_inx = {i: np.where(base_ids==state)[0].item()
-                                 for i, state in enumerate(est_ids)}
+    est_inx_2_base_inx = np.array([np.argmax(base_ids==state) for state in est_ids], dtype=int)
 
     def est_row_2_base_row(i):
         """Reshape the row est_T[i] such that the indices are the same as base_T,
@@ -135,7 +134,10 @@ def kinetic_error(base_T, base_ids, est_T, est_ids) -> dict:
     # populate the 'error' dictionary
     error = dict.fromkeys(base_ids, np.inf)
     for i, state in enumerate(est_ids):
-        error[state] = D_KL(base_T[est_inx_2_base_inx[i]], est_row_2_base_row(i))
+        error[state] = chi_squared_distance(
+                                            est_row_2_base_row(i), 
+                                            base_T[est_inx_2_base_inx[i]]
+                                            )
 
     return error
 
