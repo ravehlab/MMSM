@@ -35,7 +35,8 @@ class GibbsPartition(MetastablePartition):
         T = hmsm.T[:n, :n]
         tau = hmsm.tau
         max_k = min(self._get_max_k(n), n-1)
-        partition = _gibbs_metastable_clustering(T, 2*tau, max_k, self.transition_parameter)
+        #partition = _gibbs_metastable_clustering(T, 2*tau, max_k, self.transition_parameter)
+        partition = _gibbs_metastable_clustering(T, 2*tau, max_k, self.transition_parameter, maximum_likelihood=False)
         taus = [tau]*len(partition) #TODO get method for calculating taus in init
         return partition, taus
 
