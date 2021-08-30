@@ -9,7 +9,8 @@ def elpair(x : int,y : int) -> int:
     """
     if x>=y:
         return x*x + x + y
-    return y*y + x
+    else:
+        return y*y + x
 
 def elunpair(z : int) -> (int, int):
     """The inverse of elpair"""
@@ -17,7 +18,8 @@ def elunpair(z : int) -> (int, int):
     sqrtdiff_z = (z-sqrt_z*sqrt_z)
     if sqrtdiff_z<sqrt_z:
         return sqrtdiff_z, sqrt_z
-    return sqrt_z, sqrtdiff_z - sqrt_z
+    else:
+        return sqrt_z, sqrtdiff_z - sqrt_z
 
 @functools.lru_cache(maxsize=256)
 def signed_pair(x : int,y : int) -> int:

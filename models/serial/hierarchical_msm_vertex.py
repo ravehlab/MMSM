@@ -270,8 +270,10 @@ class HierarchicalMSMVertex:
         n = self.n
         # get the parents of vertices in column_ids which arent me (my neighbors)
         for column_id in column_ids:
-            parent = self.tree.get_parent(column_id)
-            if parent != self.id:
+            if column_id in self.children:
+                parent = self.id
+            else:
+                parent = self.tree.get_parent(column_id)
                 id_2_parent_id[column_id] = parent
                 if parent not in column_ids:
                     neighbors.add(parent)

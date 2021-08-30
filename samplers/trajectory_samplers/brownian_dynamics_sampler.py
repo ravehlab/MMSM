@@ -21,7 +21,7 @@ class BrownianDynamicsSampler(BaseTrajectorySampler):
 
     def get_initial_sample(self, sample_len, n_samples, tau):
         if self.start_points is None:
-            self.start_points = np.random.normal(0, 1, size=(n_samples, self.dim))
+            self.start_points = np.random.normal(0, 0.1, size=(n_samples, self.dim))
         trajs = []
         for point in self.start_points:
             for _ in range(n_samples):

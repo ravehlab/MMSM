@@ -524,8 +524,8 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         T : ndarray
             Transition matrix.
         level : list of int
-            A list of vertex ids, such that T[i,j] is the transition probability from vertex[i] to 
-            vertex[j] in tau time.
+            A list of vertex ids, such that T[i,j] is the transition probability from level[i] to 
+            level[j] in tau time.
             In other words, the i'th row and column of T correspond to the vertex with id level[i].
         """
         level = self.get_level(level)
