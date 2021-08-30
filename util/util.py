@@ -7,9 +7,19 @@ import sys
 from collections import defaultdict
 import numpy as np
 
-def count_dict(depth=1) -> defaultdict:
+def count_dict(depth=1):
+    depth = int(depth)
+    if depth==1:
+        return defaultdict(int)
+    elif depth==2:
+        return defaultdict(count_dict)
+    else:
+        raise ValueError("count_dict only supports depths 1 and 2.")
+
+def count_dict_depracated(depth=1) -> defaultdict:
     """
-    Gets a defaultdict, that the default value is 0.
+    ##### DEPRACATED BECAUSE IT CAN'T BE PICKLED FOR MULTIPROCESSING #####
+    Gets a defaultdict, in which the default value is 0.
     If the parameter depth is >1, this will be a defaultdict of such defaultdicts with depth depth.
     For example, count_dict(2)
 

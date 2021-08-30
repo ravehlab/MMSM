@@ -10,7 +10,7 @@ __all__ = ["BrownianDynamicsSampler"]
 class BrownianDynamicsSampler(BaseTrajectorySampler):
     #TODO: documentation
 
-    def __init__(self, force, dim, dt, kT, start_points=None, *args, **kwargs):
+    def __init__(self, force, dim, dt, kT, start_points=None, cache_size=1000, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.force = force
         self.dim = dim
@@ -18,6 +18,9 @@ class BrownianDynamicsSampler(BaseTrajectorySampler):
         self.kT = kT
         self.noise_magnitude = np.sqrt(2*self.dim * self.kT * self.dt)
         self.start_points = start_points
+        self._cache_size = cache_size
+        self._noise_cache = self.noise_magnitude*np.random.normal(size=(cache_size, 2))
+        self._cache_ptr = 0
 
     def get_initial_sample(self, sample_len, n_samples, tau):
         if self.start_points is None:
@@ -58,9 +61,14 @@ class BrownianDynamicsSampler(BaseTrajectorySampler):
         return dtrajs
 
     def _BD_step(self, x):
+        # TODO add friction coefficient
         return x + self.force(x)*self.dt + self._brownian_noise()
 
     def _brownian_noise(self):
-        noise = np.random.normal(size=self.dim)
-        noise *= np.random.normal(0, self.noise_magnitude)/np.linalg.norm(noise)
-        return noise
+        if self._cache_ptr == self._cache_size:
+            self._cache_ptr = 0
+            self._noise_cache = self.noise_magnitude*np.random.normal(size=(self._cache_size, 2))
+        self._cache_ptr += 1
+        return self._noise_cache[self._cache_ptr-1]
+
+
