@@ -10,7 +10,7 @@ __all__ = ["get_transition_matrix"]
 def make_2d(T, limit, grid_size, grid_discretizer):
     n = T.shape[0]
     T2 = np.ndarray((n*n, n*n))
-    #index to grid index - translates 1D indices of T2 to 2D indices of T (which is 4D)
+    #index to grid index - translates 1D indices of T2 to 2D indices of T (which is 3D)
     i2g = lambda i: (i//n, i%n) 
     for i, j in np.ndindex(T2.shape):
         T2[i,j] = T[i2g(i)][i2g(j)]
@@ -35,7 +35,7 @@ def get_transition_matrix(force, dt, kT, grid_discretizer, limit, subgrid_size):
     T = np.ndarray((n,n,n,n))
     for i,j in tqdm(np.ndindex((n,n)), total=n*n):
         x, y = index2coords(i, j, limit, grid_size)
-        probs_dict = get_transition_probabilities(x,y, force_np, brownian_noise,
+        probs_dict = get_transition_probabilities(x,y, force_np, dt, brownian_noise,
                                                   grid_size, subgrid_size, limit)
         for (i2, j2), p in probs_dict.items():
             T[i,j,i2,j2] = p
@@ -57,14 +57,14 @@ def coords2indices(x, y, limit, grid_size):
 def get_subgrid(grid_size, subgrid_size):
     return np.linspace(0, grid_size, subgrid_size+2)[1:-1]
 
-def get_transition_probabilities(x,y, force, brownian_noise, grid_size, subgrid_size, limit):
+def get_transition_probabilities(x,y, force, dt, brownian_noise, grid_size, subgrid_size, limit):
     xs = x + get_subgrid(grid_size, subgrid_size)
     ys = y + get_subgrid(grid_size, subgrid_size)
     xy = np.stack(np.meshgrid(xs, ys), axis=-1)
 
     p = defaultdict(float)
-
-    after_force = force(xy).reshape((-1,2))
+    after_force = (xy + dt*force(xy)) # has shape (subgrid_size,subgrid_size,2)
+    after_force = after_force.reshape((-1,2)) # reshape to (subgrid_size**2, 2)
     squares, indices = get_neighboring_squares(after_force, brownian_noise, limit, grid_size)
     for loc in after_force:
         for i, neighbor in enumerate(squares):
