@@ -82,7 +82,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                                            tau=1,\
                                            height=1,
                                            partition_estimator=self._partition_estimator,\
-                                           vertex_sampler=self._vertex_sampler,\
+                                           vertex_sampler=samplers.vertex_samplers.uniform_sample,\
                                            config=self.config)
         self._add_vertex(root)
         self._root = root.id
