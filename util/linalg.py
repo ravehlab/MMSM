@@ -24,7 +24,7 @@ def _assert_stacked_square(array):
     if m != n:
         raise LinAlgError('Last 2 dimensions of the array must be square')
 
-def _assert_stochastic(array, axis=1):
+def _assert_stochastic(array, axis=-1):
     if np.any(array < 0):
         raise LinAlgError(f"Array can not have negative values")
     if not np.all(np.isclose(np.sum(array, axis=axis), 1)):

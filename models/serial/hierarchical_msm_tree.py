@@ -77,12 +77,14 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._microstate_counts[self.unseen_id][self.unseen_id] = 1
 
     def _init_root(self):
+        uniform = samplers.vertex_samplers.uniform_sample
+        sampler = samplers.vertex_samplers.WeightedVertexSampler([uniform], np.ones(1))
         root = HierarchicalMSMVertex(self, children=set(),\
                                            parent=None,\
-                                           tau=1,\
+                                           tau=1,
                                            height=1,
-                                           partition_estimator=self._partition_estimator,\
-                                           vertex_sampler=samplers.vertex_samplers.uniform_sample,\
+                                           partition_estimator=self._partition_estimator,
+                                           vertex_sampler=sampler,
                                            config=self.config)
         self._add_vertex(root)
         self._root = root.id
