@@ -10,12 +10,16 @@ from . import MetastablePartition
 __all__ = ['GibbsPartition']
 
 class GibbsPartition(MetastablePartition):
+    """GibbsPartition.
+    """
+
 
     def __init__(self, max_k_method='default', transition_parameter=0.75, \
-                 max_size=2048, max_timescale=64):
+                 max_size=2048, max_timescale=64, mle=False):
         self.max_k_method = max_k_method
         self.transition_parameter = transition_parameter
         self._split_condition = get_size_or_timescale_split_condition(max_size, max_timescale)
+        self._mle = mle
 
     def _get_max_k(self, n):
         if self.max_k_method in ('default', '2_sqrt'):
@@ -35,7 +39,9 @@ class GibbsPartition(MetastablePartition):
         T = hmsm.T[:n, :n]
         tau = hmsm.tau
         max_k = min(self._get_max_k(n), n-1)
-        partition = _gibbs_metastable_clustering(T, 2*tau, max_k, self.transition_parameter)
+        partition = _gibbs_metastable_clustering(T, 2*tau, max_k,
+                                                 self.transition_parameter,
+                                                 maximum_likelihood=self._mle)
         taus = [tau]*len(partition) #TODO get method for calculating taus in init
         return partition, taus
 

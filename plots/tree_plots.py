@@ -17,6 +17,8 @@ def int_to_rgb(num, string=False):
     return c
 
 def get_state_pos(tree, state, cg):
+    if tree._is_microstate(state):
+        return cg.get_centers_by_ids([state])[0]
     microstates = tree.get_microstates(state)
     centers = cg.get_centers_by_ids(microstates)
     return np.mean(centers, axis=0)

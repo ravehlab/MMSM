@@ -58,7 +58,7 @@ def count_dict_depracated(depth=1) -> defaultdict:
         return lambda : defaultdict(_count_dict_inner(depth-1))
     return _count_dict_inner(depth)()
 
-get_unique_id = lambda : np.random.choice(sys.maxsize)
+get_unique_id = lambda : np.random.choice(2**32)
 
 
 def get_threshold_check_function(greater_than : dict={}, less_than : dict={}, max_time=None):
