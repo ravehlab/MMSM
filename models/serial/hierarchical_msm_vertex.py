@@ -301,24 +301,30 @@ class HierarchicalMSMVertex:
             most_likely_parent = self._get_most_likely_parent(row, n_external)
             if most_likely_parent != self.id:
                 # Double check, otherwise we get into loops of children being passed back and forth
-                if self.id not in self._get_most_likely_parents_MC(child):
+                children_T = self.tree.get_level_T(self.height-1, self.tau)
+                if self.id not in self._get_most_likely_parents_MC(child, children_T):
                     vertices_to_disown[most_likely_parent].append(child)
 
         if len(vertices_to_disown) > 0:
             return vertices_to_disown
         return False
 
-    def _get_most_likely_parents_MC(self, child):
+    def _get_most_likely_parents_MC(self, child, children_T):
         """
         Sample 100 steps of length self.tau, starting from child, and return the most likely
         parents of a vertex 1 tau-step away from child.
         """
         parent_sample = []
-        for _ in range(31): # maybe this number should depend on number of neighbors?
-            step = child
-            for __ in range(self.tau):
-                next_states, transition_probabilities = self.tree.get_external_T(step)
-                step = np.random.choice(next_states, p=transition_probabilities)
+        T, v_ids = children_T
+        try:
+            child_index = v_ids.index(child)
+        except ValueError:
+            import pdb; pdb.set_trace()
+        transition_probabilities = T[child_index]
+        steps = np.random.choice(v_ids, p=transition_probabilities, size=31)
+        steps, counts = np.unique(steps, return_counts=True)
+        for i, step in enumerate(steps):
+            for _ in range(counts[i]):
                 parent_sample.append(self.tree.get_parent(step))
         parents, counts = np.unique(parent_sample, return_counts=True)
         return parents[np.where(counts==max(counts))]
