@@ -55,6 +55,8 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._levels = defaultdict(list)
         self.vertices = dict()
         self._init_root()
+        self._cache = defaultdict(dict) # we can use this to cache results of functions that get called often
+        self._updated_height = -1
 
     def _assert_valid_vertex(self, vertex_id):
         return self._is_microstate(vertex_id) or \
@@ -429,11 +431,13 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         children to another vertex, or a change in transition rates that neccesitates the parent
         being updated), the other vertex will be added to the queue.
         """
+        self._cache.clear()
         while self._update_queue.not_empty():
             vertex_id = self._update_queue.get()
             vertex = self.vertices.get(vertex_id)
             if vertex is None:
                 continue # this vertex no longer exists
+            self._updated_height = vertex.height - 1
             result, update = vertex.update()
             if result==HierarchicalMSMVertex.SPLIT:
                 partition, taus, split_vertex, parent = update
@@ -528,6 +532,13 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             vertex[j] in tau time.
             In other words, the i'th row and column of T correspond to the vertex with id level[i].
         """
+        cache_key = f"{level, tau, parent_order, return_order})"
+        if self._updated_height <= level:
+
+            cached_result = self._cache["get_level_T"].get(cache_key)
+            if cached_result is not None: 
+                return cached_result
+
         level = self.get_level(level)
 
         if parent_order is not None: # sort the level by a given ordering over their parents
@@ -550,8 +561,11 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                 T[i,j] = transition_probability
         linalg._assert_stochastic(T)
         if return_order:
-            return np.linalg.matrix_power(T, tau), level
-        return np.linalg.matrix_power(T, tau), level
+            retval = np.linalg.matrix_power(T, tau), level
+        else:
+            retval = np.linalg.matrix_power(T, tau), level
+        self._cache["get_level_T"][cache_key] = retval
+        return retval
 
     def sample_from_stationary(self, vertex, level=0):
         """sample_from_stationary.
