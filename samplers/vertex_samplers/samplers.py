@@ -65,6 +65,8 @@ def flux(vertex):
     # get source_sink_T
     n = vertex.n
     n_full = vertex.T.shape[0]
+    if n_full == n:
+        return vertex.local_stationary
     T = np.zeros((n_full+1, n_full+1))
     T[:n_full, :n_full] = vertex._T
     # get the local stationary distribution
