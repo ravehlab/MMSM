@@ -30,6 +30,8 @@ def _get_sampler_by_name(name):
         return uniform_sample
     elif name == "flux":
         return flux
+    elif name == "equilibrium":
+        return equilibrium
     else:
         raise NotImplementedError(f"Optimizer {name} not implemented.")
 
@@ -42,7 +44,8 @@ def get_vertex_sampler(config:HMSMConfig):
     else:
         raise NotImplementedError(f"Optimizer {config.vertex_sampler} not implemented.")
 
-
+def equilibrium(vertex):
+    return vertex.local_stationary
 
 def uniform_sample(vertex):
     """Samples one of this vertices children uniformly.
@@ -58,7 +61,6 @@ def uncertainty_minimization(vertex):
     p = p/np.sum(p)
     return np.nan_to_num(p)
 
-
 def flux(vertex):
     if vertex.n==1:
         return np.ones(1)
@@ -69,7 +71,7 @@ def flux(vertex):
     T[:n_full, :n_full] = vertex._T
     # get the local stationary distribution
     mu = np.zeros(n_full+1)
-    mu[:n] = vertex.get_local_stationary_distribution()
+    mu[:n] = vertex.local_stationary
     # T[-1] is the source state, from there we go directoy to the local stationary distribution
     T[-1] = mu
     # T[i, -1] represents the probability that we've "mixed", i.e. gone back to the stationary
