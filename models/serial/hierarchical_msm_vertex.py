@@ -1,11 +1,10 @@
 """HierarchicalMSMVertex"""
-
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 from collections import defaultdict
 import warnings
 import numpy as np
-from msmtools.analysis.dense.stationary_vector import stationary_distribution
+from HMSM.ext.stationary_vector import stationary_distribution
 from HMSM.util import util, linalg
 from HMSM.models.serial.util import get_parent_update_condition
 
@@ -151,6 +150,16 @@ class HierarchicalMSMVertex:
     def is_root(self):
         return self.parent == self.id
 
+    @property
+    def local_stationary(self):
+        assert self._T_is_updated, "T should be updated before accessing."
+        return self._local_stationary
+
+    @property
+    def local_stationary_ids(self):
+        assert self._T_is_updated, "T should be updated before accessing."
+        return self._local_stationary_ids
+
     def set_parent(self, parent):
         self.parent = parent
 
@@ -241,6 +250,7 @@ class HierarchicalMSMVertex:
         linalg._assert_stochastic(self._T)
         # get the transition matrix in timestep resolution self.tau #TODO Move down 8 lines if it doesn't break anything.
         self._T_tau = np.linalg.matrix_power(self._T, self.tau) # TODO: rename _T with _T_1.
+        self._set_local_stationary_distribution()
 
         # check if there are any children which should be one of my neighbors children instead
         vertices_to_disown = self._check_disown(id_2_index, n_external)
@@ -346,11 +356,29 @@ class HierarchicalMSMVertex:
         return self.id
 
 
-    def get_local_stationary_distribution(self):
+    def _set_local_stationary_distribution(self):
+        """update self._local_stationary and self._local_stationary_ids"""
         n = self.n
-        T = self.T[:n, :n]
+        T = self._T[:n, :n]
         T = linalg.normalize_rows(T)
-        return stationary_distribution(T)
+        if hasattr(self, "_local_stationary"):
+            prev_pi = self._local_stationary
+            prev_ids = self._local_stationary_ids
+            x0 = np.zeros(n)
+            for i, id in self.index_2_id.items():
+                if id in prev_ids:
+                    prev_i = prev_ids.index(id)
+                    x0[i] = prev_pi[prev_i]
+            z = np.sum(x0)
+            if z>0:
+                x0 /= z
+            else:
+                x0 = None
+        else:
+            x0 = None
+
+        self._local_stationary = stationary_distribution(T, x0)
+        self._local_stationary_ids = [self.index_2_id[i] for i in range(n)]
 
 
     def get_external_T(self, tau=1) -> tuple:
@@ -385,7 +413,7 @@ class HierarchicalMSMVertex:
     def _update_external_T(self):
         T = self._T # this is T(1) as opposed to self.T which is T(tau)
         n = self.n
-        local_stationary = self.get_local_stationary_distribution()
+        local_stationary = self.local_stationary
         local_stationary = np.resize(local_stationary, T.shape[0])
         local_stationary[n:] = 0 # pad with 0's.
 
@@ -449,7 +477,7 @@ class HierarchicalMSMVertex:
         return recursive_sample
 
     def sample_from_stationary(self):
-        return np.random.choice(self.children, p=self.get_local_stationary_distribution())
+        return np.random.choice(self.children, p=self.local_stationary)
 
     def get_all_microstates(self):
         """get_all_microstates.
