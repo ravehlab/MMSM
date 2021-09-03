@@ -21,3 +21,15 @@ def get_concentric_with_params(square_freq=np.pi*1.5, square_mag=2, circular_fre
                 )
     return concentric_with_params
 
+def lemniscate(p):
+    f = np.array([1., 0.])
+    return np.linalg.norm(p-f)*np.linalg.norm(p+f)
+
+def lemniscate_force(p):
+    x = p[0]
+    y = p[1]
+    l = lemniscate(p)
+    dx = (2*x*x*x + 2*x*y*y - 2*x)/l#2*x*(x*x + y*y - 1)/l
+    dy = 2*y*(x*x + 1 + y*y)/l
+    return np.array([-dx, -dy])
+
