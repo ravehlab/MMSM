@@ -24,8 +24,8 @@ class WeightedVertexSampler():
         return self._weights.dot(distributions)
 
 def _get_sampler_by_name(name):
-    if name in ("auto", "uncertainty_minimization"):
-        return uncertainty_minimization
+    if name in ("auto", "exploration"):
+        return exploration
     elif name == "uniform":
         return uniform_sample
     elif name == "flux":
@@ -52,7 +52,7 @@ def uniform_sample(vertex):
     """
     return np.ones(vertex.n)/vertex.n
 
-def uncertainty_minimization(vertex):
+def exploration(vertex):
     children = vertex.children
     eps = 1e-6
     p = np.ndarray(vertex.n)

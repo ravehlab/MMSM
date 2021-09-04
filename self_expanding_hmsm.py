@@ -11,6 +11,9 @@ from HMSM.util import util
 from HMSM.samplers.trajectory_samplers import BaseTrajectorySampler
 from HMSM.discretizers import BaseDiscretizer
 
+def _final_states(dtrajs):
+    return [dtraj[-1] for dtraj in dtrajs]
+
 class SelfExpandingHierarchicalMSM(ABC):
     """SelfExpandingHierarchicalMSM
     This class is used to build and manage a hierarchical MSM over some energy landscape, as will
@@ -119,18 +122,31 @@ class SelfExpandingHierarchicalMSM(ABC):
                                         'serial' is currently supported.")
         return tree
 
-
     def _init_sample(self):
-        dtrajs = self._sampler.get_initial_sample(self.config.n_samples,
-                                                  self.config.sample_len,
+        dtrajs = self._sampler.get_initial_sample(self.config.trajectory_len,
+                                                  self.config.n_trajectories,
                                                   self.config.base_tau)
         self._hmsm_tree.update_model_from_trajectories(dtrajs)
-        self._n_samples += self.batch_size
+        self._equilibrium_sample = _final_states(dtrajs)
+        self._n_samples += self.config.n_trajectories * self.config.trajectory_len
+
+    def _get_equilibrium_sample(self, dtrajs):
+        states = _final_states(dtrajs)
+        restart_states = np.random.binomial(1, 
+                                            self.config.restart_fraction,
+                                            self.config.n_trajectories)
+        new_states = self.tree.sample_states(np.sum(restart_states))
+
+        for i, restart in enumerate(restart_states):
+            if restart:
+                states[i] = new_states.pop()
+        return states
 
 
     @property
     def batch_size(self):
-        return self.config.n_microstates * self.config.n_samples * self.config.sample_len
+        return self.config.n_microstates * self.config.n_samples * self.config.sample_len + \
+               self.config.n_trajectories * self.config.trajectory_len
 
     @property
     def timestep_in_seconds(self):
@@ -148,7 +164,7 @@ class SelfExpandingHierarchicalMSM(ABC):
         #TODO document or eliminate
         return self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
 
-    def expand(self, max_cputime=np.inf, max_samples=np.inf, min_timescale_sec=np.inf):
+    def expand(self, max_cputime=np.inf, max_samples=np.inf):
         """
         Estimate an HMSM by sampling from the sampler.
 
@@ -162,30 +178,39 @@ class SelfExpandingHierarchicalMSM(ABC):
             Minimum timescale of the full HMSM, after which to stop sampling.
         """
 
-        if max_cputime == max_samples == min_timescale_sec == np.inf:
+        if max_cputime == max_samples == np.inf:
             # TODO: throw exception instead
             warnings.warn("At least one of the parameters max_cputime, max_samples, or \
                               min_timescale_sec must be given")
             return
 
-        max_values = {'n_samples' : max_samples, 'timescale' : min_timescale_sec}
+        max_values = {'n_samples' : max_samples}
         stop_condition = util.get_threshold_check_function(max_values, max_time=max_cputime)
         n_samples = 0
         timescale = np.inf
         batch_size = self.batch_size
 
-        while not stop_condition(n_samples=n_samples, timescale=timescale):
+        # Main loop: 1) sample from equilibrium 2) adaptive sampling for refinement 3) update; repeat
+        while not stop_condition(n_samples=n_samples):
+            # equilibrium sampling:
+            equilibrium_dtrajs = self._sampler.sample_from_states(self._equilibrium_sample,
+                                                                  self.config.trajectory_len,
+                                                                  1,
+                                                                  self.config.base_tau)
+
+            # choose microstates for adaptive sampling, and get trajectories:
             microstates = self._hmsm_tree.sample_states(n_samples=self.config.n_microstates)
-            dtrajs = self._sampler.sample_from_states(microstates,
-                                                          self.config.n_samples,
+            adaptive_dtrajs = self._sampler.sample_from_states(microstates,
                                                           self.config.sample_len,
+                                                          self.config.n_samples,
                                                           self.config.base_tau)
-            self._hmsm_tree.update_model_from_trajectories(dtrajs)
+
+            self._hmsm_tree.update_model_from_trajectories(adaptive_dtrajs + equilibrium_dtrajs)
+            self._equilibrium_sample = self._get_equilibrium_sample(equilibrium_dtrajs)
 
             # some book keeping:
             n_samples += batch_size
             self._n_samples += batch_size
-            timescale = self._hmsm_tree.get_longest_timescale() * self.timestep_in_seconds
             if self._n_samples - self._last_force_rebuild >= 1e6:
                 self._hmsm_tree.force_rebuild_tree()
                 self._last_force_rebuild = self._n_samples
