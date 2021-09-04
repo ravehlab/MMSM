@@ -57,6 +57,11 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._init_root()
         self._cache = defaultdict(dict) # we can use this to cache results of functions that get called often
         self._updated_height = -1
+        self._oom_reweighted = config.oom
+        if self._oom_reweighted:
+            # self._2_step_transitions[i][(j,k)] is the number of j->k->i transitions observed
+            # The ordering is backwards so that it can be efficiently converted to a csc matrix
+            self._2_step_transitions = util.count_dict(depth=2)
 
     def _assert_valid_vertex(self, vertex_id):
         return self._is_microstate(vertex_id) or \
@@ -219,6 +224,8 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         """
 
         updated_microstates, parents_2_new_microstates = self._count_transitions(dtrajs)
+        if self._oom_reweighted:
+            self._count_2_step_transitions(dtrajs)
         # add newly discovered microstates to their parents
         for parent, children in parents_2_new_microstates.items():
             self.vertices[parent].add_children(children)
@@ -280,12 +287,17 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         -------
         T : np.ndarray of shape (n,n), where n is the number of microstates in the tree
             Transition probability matrix, in timestep of config.base_tau
-        id_2_index : dict
-            Dictionary mapping microstate ids to their indices in T
+        id_2_index : List
+            List mapping indices in T to their corresponding microstate ids
         """
-        n = len(self._microstate_parents)
-        T = np.zeros((n,n))
         level = self.get_level(0)
+        if self._oom_reweighted:
+            OOM_reweighted_T = linalg.get_OOM_reweighted_transition_matrix(self._microstate_counts,
+                                                                           self._2_step_transitions,
+                                                                           level)
+            return OOM_reweighted_T, level
+        n = len(level)
+        T = np.zeros((n,n))
         for i, src in enumerate(level):
             ids, row = self._microstate_transitions[src]
             for id, transition_probability in zip(ids, row):
@@ -311,6 +323,13 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             pi[id] = st[index]
         return pi
 
+    def _count_2_step_transitions(self, dtrajs):
+        for dtraj in dtrajs:
+            if len(dtraj)<3:
+                continue
+            for i in range(2, len(dtraj)):
+                self._2_step_transitions[dtraj[i]][(dtraj[i-2], dtraj[i-1])] += 1
+
     def _count_transitions(self, dtrajs):
         updated_microstates = set()
         parents_2_new_microstates = defaultdict(set)
@@ -319,13 +338,17 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                 continue
             updated_microstates.update(dtraj)
             src = dtraj[0]
+
+            # check if the first state is new, this should only happen at initialization, where
+            # the microstate level is the top level MSM, sot he parent is always the root.
             if not self._is_microstate(src): #TODO clean this bit up
                 assert self.height==1
                 self._microstate_parents[src] = self.root
                 parents_2_new_microstates[self.root].add(src)
+
             for i in range(1, len(dtraj)):
                 dst = dtraj[i]
-                # count the observed transition, and a pseudocount for the reverse transition
+                # count the observed transition
                 self._microstate_counts[src][dst] += 1
                 # evaluate the reverse transition, so that it will be set to 0 if none have been
                 # observed yet. This is so that the prior weight of this transition will be alpha

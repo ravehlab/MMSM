@@ -5,6 +5,7 @@
 import time
 import sys
 from collections import defaultdict
+import scipy
 import numpy as np
 
 def count_dict(depth=1):
@@ -133,3 +134,37 @@ def get_threshold_check_function(greater_than : dict={}, less_than : dict={}, ma
                 return time.time() > start_time + max_time
         return False
     return _check_function
+
+def sparse_matrix_from_count_dict(counts, ids):
+    data = []
+    indices = []
+    indptr = []
+    id_2_inx = {id:i for i, id in enumerate(ids)}
+    for src in ids:
+        indptr.append(len(data))
+        for dest, count in counts[src].items():
+            indices.append(id_2_inx[dest])
+            data.append(count)
+    indptr.append(len(data))
+    return scipy.sparse.csr_matrix((data, indices, indptr))
+
+def two_step_count_matrix(counts, ids):
+    n = len(ids)
+    id_2_inx = {id:i for i, id in enumerate(ids)}
+    shape = (n*n, n)
+    data = []
+    rows = []
+    cols = []
+
+    for state in counts.keys():
+        j = id_2_inx[state]
+        for (prev_prev_state, prev_state), c in counts[state].items():
+            i = id_2_inx[prev_prev_state]*n + id_2_inx[prev_state]
+            data.append(c)
+            rows.append(i)
+            cols.append(j)
+    return scipy.sparse.coo_matrix((data, (rows, cols)), shape=shape).tocsc()
+
+
+
+

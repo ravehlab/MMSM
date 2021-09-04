@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib as mpl
 from numpy.linalg import LinAlgError
 from sklearn.cluster import MiniBatchKMeans
+from HMSM.util import util
+from HMSM.ext import _OOM_MSM as pyemma_oom
 
 sample_from_ndarray = lambda array, n : array[np.random.choice(array.shape[0], n, replace=False)] \
                                         if n<=array.shape[0] else array.copy()
@@ -94,3 +96,13 @@ def get_longest_timescale(P, tau):
     t_2 = np.abs(tau/np.log(lambda_2))
     return t_2
 
+def get_OOM_reweighted_transition_matrix(count_dict, two_step_count_dict, state_ids):
+    csr_counts = util.sparse_matrix_from_count_dict(count_dict, state_ids)
+    counts_arr = csr_counts.toarray()
+    csc_2counts = util.two_step_count_matrix(two_step_count_dict, state_ids)
+    smean, sdev = pyemma_oom.bootstrapping_count_matrix(csr_counts)
+    rank_ind = pyemma_oom.rank_decision(smean, sdev)
+    Xi, omega, sigma, evals = pyemma_oom.oom_components(counts_arr, csc_2counts, rank_ind=rank_ind)
+    T = pyemma_oom.equilibrium_transition_matrix(Xi, omega, sigma,
+                                                 reversible=False, return_lcc=False)
+    return T

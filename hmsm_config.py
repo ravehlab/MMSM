@@ -42,3 +42,4 @@ class HMSMConfig:
     partition_estimator: str='auto'
     partition_kwargs: dict=field(default_factory=dict)
     transition_estimator: str='Dirichlet_MMSE'
+    oom: bool=False
