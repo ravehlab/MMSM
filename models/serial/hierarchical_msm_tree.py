@@ -58,6 +58,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._cache = defaultdict(dict) # we can use this to cache results of functions that get called often
         self._updated_height = -1
         self._oom_reweighted = config.oom
+        self._reversible = config.reversible
         if self._oom_reweighted:
             # self._2_step_transitions[i][(j,k)] is the number of j->k->i transitions observed
             # The ordering is backwards so that it can be efficiently converted to a csc matrix
@@ -350,9 +351,12 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                 dst = dtraj[i]
                 # count the observed transition
                 self._microstate_counts[src][dst] += 1
-                # evaluate the reverse transition, so that it will be set to 0 if none have been
-                # observed yet. This is so that the prior weight of this transition will be alpha
-                _=self._microstate_counts[dst][src]
+                if self._reversible:
+                    self._microstate_counts[dst][src] += 1
+                else:
+                    # evaluate the reverse transition, so that it will be set to 0 if none have been
+                    # observed yet. This is so that the prior weight of this transition will be alpha
+                    _=self._microstate_counts[dst][src]
 
                 # assign newly discovered microstates to the MSM they were discovered from
                 if self._microstate_parents.get(dst) is None:
@@ -546,7 +550,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         level : int
             level
         tau : int
-            tau
+            tau 
 
         Returns
         -------
@@ -557,6 +561,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             level[j] in tau time.
             In other words, the i'th row and column of T correspond to the vertex with id level[i].
         """
+        #FIXME use of tau here is misleading, as it is in units of base_tau.
         cache_key = f"{level, tau, parent_order, return_order})"
         if self._updated_height <= level:
 
