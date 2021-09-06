@@ -27,8 +27,7 @@ class BrownianDynamicsSampler(BaseTrajectorySampler):
             self.start_points = np.random.normal(0, 0.1, size=(n_samples, self.dim))
         trajs = []
         for point in self.start_points:
-            for _ in range(n_samples):
-                trajs.append(self.sample_from_point(point, sample_len, tau))
+            trajs.append(self.sample_from_point(point, sample_len, tau))
         return self._get_dtrajs(trajs)
 
 
