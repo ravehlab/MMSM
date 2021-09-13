@@ -4,13 +4,13 @@
 
 from collections import defaultdict
 import numpy as np
-from msmtools.analysis.dense.stationary_vector import stationary_distribution #TODO include this function in package
+from HMSM.ext.stationary_vector import stationary_distribution #TODO include this function in package
 from HMSM import estimators, HMSMConfig, samplers
 from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.models import BaseHierarchicalMSMTree
 from . import HierarchicalMSMVertex
 from .util import max_fractional_difference
-
+import msmtools
 
 class HierarchicalMSMTree(BaseHierarchicalMSMTree):
     """HierarchicalMSMTree.
@@ -297,6 +297,9 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                                                                            self._2_step_transitions,
                                                                            level)
             return OOM_reweighted_T, level
+        elif self._reversible:
+            count_matrix = util.sparse_matrix_from_count_dict(self._microstate_counts, level)
+            T = msmtools.estimation.transition_matrix(count_matrix, reversible=True) 
         n = len(level)
         T = np.zeros((n,n))
         for i, src in enumerate(level):
@@ -351,12 +354,9 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                 dst = dtraj[i]
                 # count the observed transition
                 self._microstate_counts[src][dst] += 1
-                if self._reversible:
-                    self._microstate_counts[dst][src] += 1
-                else:
-                    # evaluate the reverse transition, so that it will be set to 0 if none have been
-                    # observed yet. This is so that the prior weight of this transition will be alpha
-                    _=self._microstate_counts[dst][src]
+                # evaluate the reverse transition, so that it will be set to 0 if none have been
+                # observed yet. This is so that the prior weight of this transition will be alpha
+                _=self._microstate_counts[dst][src]
 
                 # assign newly discovered microstates to the MSM they were discovered from
                 if self._microstate_parents.get(dst) is None:
