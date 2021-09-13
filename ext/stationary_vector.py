@@ -31,7 +31,8 @@ vectors of stochastic matrices
 
 """
 import numpy as np
-from scipy.linalg import eig, lu_factor, lu_solve
+from scipy.linalg import lu_factor, lu_solve
+from numpy.linalg import eig
 
 
 def backward_iteration(A, mu, x0, tol=1e-14, maxiter=100):
@@ -116,7 +117,7 @@ def stationary_distribution_from_eigenvector(T):
         Vector of stationary probabilities.
 
     """
-    val, L = eig(T, left=True, right=False)
+    val, L = eig(T.T)
 
     """ Sorted eigenvalues and left and right eigenvectors. """
     perm = np.argsort(val)[::-1]
@@ -150,7 +151,7 @@ def stationary_distribution(T, x0=None):
         mu = stationary_distribution_from_backward_iteration(T, x0)
         if np.any(mu < 0):  # numerical problem, fall back to more robust algorithm.
             fallback=True
-    except RuntimeError:
+    except (RuntimeError, ValueError) as e:
         fallback = True
 
     if fallback:
