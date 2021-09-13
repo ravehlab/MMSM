@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import rel_entr
-from msmtools.analysis.dense.stationary_vector import stationary_distribution
+from HMSM.ext.stationary_vector import stationary_distribution
 
 
 def induced_distribution(hmsm, descendant_level, parent_level):
