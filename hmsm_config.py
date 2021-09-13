@@ -29,9 +29,9 @@ class HMSMConfig:
     """
     ##### sampling parameters #####
         ## equilibrium sampling
-    n_trajectories: int=10
-    trajectory_len: int=1000
-    restart_fraction: float=0.2
+    n_trajectories: int=50
+    trajectory_len: int=5000
+    restart_fraction: float=0.1
     
         ## adaptive sampling ##
     n_microstates: int=50
@@ -48,6 +48,7 @@ class HMSMConfig:
     alpha: float=1. # Dirichlet prior
     transition_estimator: str='Dirichlet_MMSE'
     oom: bool=False
+    reversible: bool=True
 
     ##### Tree structure parameters #####
     parent_update_condition: str='auto'

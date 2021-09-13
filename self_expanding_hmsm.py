@@ -113,6 +113,7 @@ class SelfExpandingHierarchicalMSM(ABC):
         self._n_samples = self._last_force_rebuild = 0
         self._effective_timestep_seconds = self._sampler.dt * self.config.base_tau
         self._init_sample()
+        self._rebuild_interval = 1e6
 
     def _init_tree(self):
         if self.config.tree_type in ('auto', 'serial'):
@@ -211,7 +212,8 @@ class SelfExpandingHierarchicalMSM(ABC):
             # some book keeping:
             n_samples += batch_size
             self._n_samples += batch_size
-            if self._n_samples - self._last_force_rebuild >= 1e6:
+            if self._n_samples - self._last_force_rebuild >= self._rebuild_interval:
                 self._hmsm_tree.force_rebuild_tree()
                 self._last_force_rebuild = self._n_samples
+                self._rebuild_interval *= 2
 

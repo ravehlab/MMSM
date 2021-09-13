@@ -59,7 +59,7 @@ class BaseDiscretizer(ABC):
         to uniform.
         """
         random_index = np.random.randint(len(self._representatives[cluster_id]))
-        return self._representatives[cluster_id][random_index]
+        return self._representatives[cluster_id][random_index].copy()
 
     def _sample_representatives(self, cluster_ids, data):
         """
@@ -78,18 +78,17 @@ class BaseDiscretizer(ABC):
             self._cluster_count[cluster_id] += 1
             if not self._representatives.get(cluster_id):
                 # If this is the first observation of this cluster
-                self._representatives[cluster_id] = [data[i]]
+                self._representatives[cluster_id] = [data[i].copy()]
 
             sample_probability = self._representative_sample_size/self._cluster_count[cluster_id]
             if np.random.random() < sample_probability:
                 # with probability r/n, keep this point. It can be seen by induction
                 # that this gives the desired property (where r is the number of representatives).
                 if self._cluster_count[cluster_id] < self._representative_sample_size:
-                    self._representatives[cluster_id].append(data[i])
+                    self._representatives[cluster_id].append(data[i].copy())
                 else:
                     random_index = np.random.choice(self._representative_sample_size)
-                    self._representatives[cluster_id][random_index] = data[i]
-
+                    self._representatives[cluster_id][random_index] = data[i].copy()
 
     @property
     @abstractmethod

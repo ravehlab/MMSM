@@ -1,5 +1,5 @@
 import numpy as np
-from msmtools.analysis.dense.stationary_vector import stationary_distribution
+from HMSM.ext.stationary_vector import stationary_distribution
 from .util import D_KL, induced_distribution, mean_hitting_time, chi_squared_distance
 
 

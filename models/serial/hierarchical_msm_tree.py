@@ -4,13 +4,13 @@
 
 from collections import defaultdict
 import numpy as np
-from msmtools.analysis.dense.stationary_vector import stationary_distribution #TODO include this function in package
+from HMSM.ext.stationary_vector import stationary_distribution #TODO include this function in package
 from HMSM import estimators, HMSMConfig, samplers
 from HMSM.util import util, UniquePriorityQueue, linalg
 from HMSM.models import BaseHierarchicalMSMTree
 from . import HierarchicalMSMVertex
 from .util import max_fractional_difference
-
+import msmtools
 
 class HierarchicalMSMTree(BaseHierarchicalMSMTree):
     """HierarchicalMSMTree.
@@ -58,6 +58,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._cache = defaultdict(dict) # we can use this to cache results of functions that get called often
         self._updated_height = -1
         self._oom_reweighted = config.oom
+        self._reversible = config.reversible
         if self._oom_reweighted:
             # self._2_step_transitions[i][(j,k)] is the number of j->k->i transitions observed
             # The ordering is backwards so that it can be efficiently converted to a csc matrix
@@ -296,6 +297,9 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
                                                                            self._2_step_transitions,
                                                                            level)
             return OOM_reweighted_T, level
+        elif self._reversible:
+            count_matrix = util.sparse_matrix_from_count_dict(self._microstate_counts, level)
+            T = msmtools.estimation.transition_matrix(count_matrix, reversible=True) 
         n = len(level)
         T = np.zeros((n,n))
         for i, src in enumerate(level):
@@ -547,7 +551,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         level : int
             level
         tau : int
-            tau
+            tau 
 
         Returns
         -------
@@ -558,6 +562,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             level[j] in tau time.
             In other words, the i'th row and column of T correspond to the vertex with id level[i].
         """
+        #FIXME use of tau here is misleading, as it is in units of base_tau.
         cache_key = f"{level, tau, parent_order, return_order})"
         if self._updated_height <= level:
 
