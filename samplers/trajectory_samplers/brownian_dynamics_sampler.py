@@ -3,6 +3,7 @@
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
 import numpy as np
+import numba
 from HMSM.samplers.trajectory_samplers import BaseTrajectorySampler
 
 __all__ = ["BrownianDynamicsSampler"]
@@ -33,22 +34,36 @@ class BrownianDynamicsSampler(BaseTrajectorySampler):
 
     def sample_from_states(self, microstates, sample_len, n_samples, tau):
         dtrajs = []
+        temp_traj = np.ndarray((sample_len, 2))
         for microstate in microstates:
             for _ in range(n_samples):
                 x = self._discretizer.sample_from(microstate)
-                traj = self.sample_from_point(x, sample_len, tau)
-                dtraj = [microstate] + self._get_dtraj(traj)
+                assert self._discretizer._coarse_grain_states(np.array([x]))[0]==microstate
+                self.njit_sample_from_point(x, sample_len, tau, self.force, self.dt, self.noise_magnitude, temp_traj)
+                dtraj = self._get_dtraj(temp_traj)
                 dtrajs.append(dtraj)
         return dtrajs
 
     def sample_from_point(self, point, sample_len, tau):
-        x = point.copy()
+        x = point
         traj = [x]
         for _ in range(sample_len-1):
             for __ in range(tau):
                 x = self._BD_step(x)
             traj.append(x)
         return np.array(traj)
+
+    @staticmethod
+    @numba.njit
+    def njit_sample_from_point(point, sample_len, tau, force, dt, noise_magnitude, out):
+        temp = point
+        out[0] = temp
+        for i in range(1, sample_len):
+            for __ in range(tau):
+                step = force(temp)*dt + np.random.normal(0, 1, 2)*noise_magnitude
+                temp += step 
+            out[i] = temp
+
 
     def _get_dtraj(self, traj):
         return self._discretizer.get_coarse_grained_states(traj)
