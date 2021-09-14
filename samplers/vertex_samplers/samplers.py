@@ -18,12 +18,26 @@ class WeightedVertexSampler():
 
     def _get_distribution(self, vertex):
         distributions = np.array([heuristic(vertex) for heuristic in self._heuristics])
-        if np.any(np.isnan(distributions)):
-            import pdb; pdb.set_trace()
-            distributions = np.array([heuristic(vertex) for heuristic in self._heuristics])
         return self._weights.dot(distributions)
 
+    def _get_full_distribution(self, vertex):
+        local_distribution = self._get_distribution(vertex)
+        # base case:
+        if vertex.height == 1:
+            return dict(zip(vertex.children, local_distribution))
+
+        # recursive construction:
+        global_distribution = {}
+        for i, child_id in enumerate(vertex.children):
+            child = vertex.tree.vertices[child_id]
+            child_distribution = self._get_full_distribution(child)
+            for microstate_id, local_probability in child_distribution.items():
+                global_distribution[microstate_id] = (local_probability*local_distribution[i])
+        return global_distribution
+
+
 def _get_sampler_by_name(name):
+    #TODO just use a dictionary already!
     if name in ("auto", "exploration"):
         return exploration
     elif name == "uniform":
@@ -38,9 +52,9 @@ def _get_sampler_by_name(name):
 
 def get_vertex_sampler(config:HMSMConfig):
     if config.vertex_sampler in ("auto", "weighted"):
-         heuristics = [_get_sampler_by_name(h) for h in config.sampling_heuristics]
-         weights = np.array(config.sampling_heuristic_weights)
-         return WeightedVertexSampler(heuristics, weights)
+        heuristics = [_get_sampler_by_name(h) for h in config.sampling_heuristics]
+        weights = np.array(config.sampling_heuristic_weights)
+        return WeightedVertexSampler(heuristics, weights)
     else:
         raise NotImplementedError(f"Optimizer {config.vertex_sampler} not implemented.")
 
@@ -73,7 +87,7 @@ def flux(vertex):
     T[:n_full, :n_full] = vertex._T
     # get the local stationary distribution
     mu = np.zeros(n_full+1)
-    mu[:n] = vertex.local_stationary
+    mu[:n] = vertex.local_stationary 
     # T[-1] is the source state, from there we go directoy to the local stationary distribution
     T[-1] = mu
     # T[i, -1] represents the probability that we've "mixed", i.e. gone back to the stationary
@@ -87,6 +101,9 @@ def flux(vertex):
     qplus = committor(T, source, sink)
     qminus = 1-qplus
     # get flux network
-    F = flux_matrix(T, mu, qminus, qplus)
-    flux = np.abs(flux_production(F)[:n]) #TODO maybe only use positive flux?
-    return flux/np.sum(flux)
+    F = flux_matrix(T, mu, qminus, qplus, netflux=False)
+    influxes = np.array(np.sum(F[:n,:n], axis=0)).flatten()  # all that flows in, not including from the source state
+    outfluxes = np.array(np.sum(F, axis=1)).flatten()[:n]  # all that flows out from the children, including to the neighboring states
+    flux_vals = outfluxes - influxes
+    flux_vals[flux_vals<0] = 1e-12 # We're only intrested in positive flux producers
+    return flux_vals/np.sum(flux_vals)
