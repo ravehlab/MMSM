@@ -348,6 +348,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             if not self._is_microstate(src): #TODO clean this bit up
                 assert self.height==1
                 self._microstate_parents[src] = self.root
+                _=self._microstate_counts[src][src]
                 parents_2_new_microstates[self.root].add(src)
 
             for i in range(1, len(dtraj)):
