@@ -29,7 +29,7 @@ def lemniscate_force(p):
     x = p[0]
     y = p[1]
     l = lemniscate(p)
-    dx = (2*x*x*x + 2*x*y*y - 2*x)/l#2*x*(x*x + y*y - 1)/l
+    dx = (2*x*x*x + 2*x*y*y - 2*x)/l
     dy = 2*y*(x*x + 1 + y*y)/l
     return np.array([-dx, -dy])
 

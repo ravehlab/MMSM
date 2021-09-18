@@ -100,7 +100,7 @@ def get_OOM_reweighted_transition_matrix(count_dict, two_step_count_dict, state_
     csr_counts = util.sparse_matrix_from_count_dict(count_dict, state_ids)
     counts_arr = csr_counts.toarray()
     csc_2counts = util.two_step_count_matrix(two_step_count_dict, state_ids)
-    smean, sdev = pyemma_oom.bootstrapping_count_matrix(csr_counts)
+    smean, sdev = pyemma_oom.bootstrapping_count_matrix(csr_counts, 500)
     rank_ind = pyemma_oom.rank_decision(smean, sdev)
     Xi, omega, sigma, evals = pyemma_oom.oom_components(counts_arr, csc_2counts, rank_ind=rank_ind)
     T = pyemma_oom.equilibrium_transition_matrix(Xi, omega, sigma,

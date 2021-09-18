@@ -48,7 +48,7 @@ class HMSMConfig:
     alpha: float=1. # Dirichlet prior
     transition_estimator: str='Dirichlet_MMSE'
     oom: bool=False
-    reversible: bool=True
+    reversible: bool=False
 
     ##### Tree structure parameters #####
     parent_update_condition: str='auto'
