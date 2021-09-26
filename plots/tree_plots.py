@@ -1,10 +1,12 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from HMSM.plots.plots import integrate_2d
 from HMSM.tests.force_functions.two_dimensional import neg
 import graph_tool.all as gt
 import graph_tool.draw as draw
+
 
 def in_notebook():
     return 'ipykernel' in sys.modules
@@ -23,11 +25,11 @@ def get_state_pos(tree, state, cg):
     centers = cg.get_centers_by_ids(microstates)
     return np.mean(centers, axis=0)
 
-def int_to_rgb(num, string=False):
-    c = np.array([(num%1103)%256, (num%1367)%256, (num%1447)%256, 256])/256
-    c = list(c)
-    if string:
-        c = "#%2x%2x%2x" % c[:-1]*256
+def int_to_rgb(i):
+    np_random_state = np.random.get_state()
+    np.random.seed(i%(2**32))
+    c = list(np.random.random(3))
+    np.random.set_state(np_random_state )
     return c
 
 def plot_level_graph(tree, level, force, cg, ax=None, loc_2d=True, contour=None):
@@ -71,8 +73,8 @@ def plot_level_graph(tree, level, force, cg, ax=None, loc_2d=True, contour=None)
             xlim = contour[0]
             ylim = contour[0]
             X, Y, I = contour[1] 
-            ax.contour(X,Y,I, alpha=0.4, levels=70, zorder=0, cmap='gray')
-            ax.contourf(X,Y,I, alpha=0.4, levels=70, zorder=0, cmap='viridis')
+            ax.contour(X,Y,I, alpha=0.4, levels=15, zorder=0., cmap='gray')
+            ax.contourf(X,Y,I, alpha=0.4, levels=25, zorder=0., cmap=sns.color_palette("rocket", as_cmap=True))
             ax.set_xlim(xlim)
             ax.set_ylim(ylim)
         
@@ -90,12 +92,14 @@ def plot_level_graph(tree, level, force, cg, ax=None, loc_2d=True, contour=None)
     eprop_size = draw.prop_to_size(eprop_tp, mi=0.0001, ma=0.08, log=False)
     gt.graph_draw(g, vertex_size=vprop_size, edge_pen_width=eprop_size, pos=vprop_pos, mplfig=ax,
                   vertex_pen_width=vprop_pen_size, vertex_fill_color=vprop_parent, 
-                  vertex_color=vprop_color, zorder=1, xlim=xlim)
+                  vertex_color=vprop_color, zorder=50, xlim=xlim)
 
 
 def plot_states(cg, microstate_ids, ax, label=None, c=None):
     points = []
     for microstate in microstate_ids:
+        points.append(cg.sample_from(microstate))
+        points.append(cg.sample_from(microstate))
         points.append(cg.sample_from(microstate))
     points = np.array(points)
     ax.scatter(*points.T, label=label, s=215, alpha=0.3, color=c, zorder=0.)
@@ -126,18 +130,18 @@ def plot_tree(cg, tree, force, lim=7):
         raise Exception("set pyplot backend to cairo to use plot_tree")
 
     h = tree.height
-    if h==1:
+    if h<3:
         fig, ax = plt.subplots(1,1, figsize=(10,10*(h)))
         plot_level(cg, tree, 1, ax)
         return
     fig, ax = plt.subplots(h-1,1, figsize=(10,10*(h)))
     xlim = (-lim,lim)
     ylim = (-lim,lim)
-    heatmap = integrate_2d(neg(force), xlim, ylim, 0.1)
-    contour = (xlim, heatmap)
+    X,Y,Z = integrate_2d(force, xlim, ylim, 0.1)
+    contour = (xlim, (X,Y,-Z))
     for i in range(1,h):
         plot_level(cg, tree, h-i, ax[i-1])
         ax[i-1].use_sticky_edges = False
-        ax[i-1].set_xlim(xlim)
-        ax[i-1].set_ylim(ylim)
+        #ax[i-1].set_xlim(xlim)
+        #ax[i-1].set_ylim(ylim)
         plot_level_graph(tree, h-i, force, cg, ax=ax[i-1], contour=contour)
