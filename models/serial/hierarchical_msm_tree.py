@@ -422,7 +422,7 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             split_vertex.remove_children(split_vertex.children)
             self.vertices[parent].add_children(new_vertices)
             split_vertex.height += 1
-            split_vertex.tau *= 2 #TODO: this should be dependent on the partition
+            split_vertex.tau *= 16 #TODO: this should be dependent on the partition
             self._add_vertex(split_vertex)
         self._update_vertex(parent)
 
