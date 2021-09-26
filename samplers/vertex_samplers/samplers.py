@@ -106,4 +106,6 @@ def flux(vertex):
     outfluxes = np.array(np.sum(F, axis=1)).flatten()[:n]  # all that flows out from the children, including to the neighboring states
     flux_vals = outfluxes - influxes
     flux_vals[flux_vals<0] = 1e-12 # We're only intrested in positive flux producers
+    for i, child in enumerate(vertex.children):
+        flux_vals[i] /= max(1, vertex.tree.get_n_samples(child))
     return flux_vals/np.sum(flux_vals)

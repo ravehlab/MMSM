@@ -181,7 +181,7 @@ class HierarchicalMSMVertex:
         self._T_is_updated = False
 
     def update(self):
-        self.n_samples = np.sum([self.tree.get_n_samples(child) for child in self.children])
+        self.n_samples = np.sum([self.tree.get_n_samples(child) for child in self.children])/self.n
         return self._update_T()
 
     def _check_parent_update_condition(self):
