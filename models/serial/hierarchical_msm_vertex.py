@@ -328,10 +328,7 @@ class HierarchicalMSMVertex:
         """
         parent_sample = []
         T, v_ids = children_T
-        try:
-            child_index = v_ids.index(child)
-        except ValueError:
-            import pdb; pdb.set_trace()
+        child_index = v_ids.index(child)
         transition_probabilities = T[child_index]
         steps = np.random.choice(v_ids, p=transition_probabilities, size=31)
         steps, counts = np.unique(steps, return_counts=True)

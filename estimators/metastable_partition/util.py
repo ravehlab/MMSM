@@ -34,9 +34,13 @@ def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
     """Get a function which checks if a vertices size or timescale are larger than some constant,
     provided as arguments to this function.
     """
-    # MOVE: estimators
-    def _split_condition(hmsm):
-        #TODO max_timescale should depend on parents timescale
-        return hmsm.timescale/hmsm.tau > max_timescale or hmsm.n > max_size
-    return _split_condition
+    return size_or_timescale_split_condition(max_timescale, max_size)
+
+class size_or_timescale_split_condition:
+    def __init__(self, max_timescale, max_size):
+        self.max_timescale = max_timescale
+        self.max_size = max_size
+
+    def __call__(self, vertex):
+        return vertex.timescale/vertex.tau > self.max_timescale or vertex.n > self.max_size
 

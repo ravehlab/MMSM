@@ -2,8 +2,7 @@ import numpy as np
 
 def get_parent_update_condition(condition, threshold=0.1):
     if condition in ("auto", 'fractional_difference'):
-        return lambda vertex : max_fractional_difference(vertex._last_update_sent,
-                                                         vertex.get_external_T()) >= threshold
+        return max_fractional_difference_update_condition(threshold)
     raise NotImplementedError(f"Parent update condition {condition} not implemented.")
 
 
@@ -39,3 +38,12 @@ def max_fractional_difference(ext_T1, ext_T2):
         max_diff = max(max_diff, diff)
 
     return max_diff
+
+class max_fractional_difference_update_condition:
+    def __init__(self, threshold):
+        self.threshold = threshold
+
+    def __call__(self, vertex):
+        diff =  max_fractional_difference(vertex._last_update_sent, vertex.get_external_T())
+        return diff >= self.threshold
+
