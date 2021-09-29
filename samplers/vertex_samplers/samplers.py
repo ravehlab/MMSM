@@ -92,8 +92,9 @@ def flux(vertex):
     T[-1] = mu
     # T[i, -1] represents the probability that we've "mixed", i.e. gone back to the stationary
     # distribution, represented by the state with index -1, after bing in state i
+    mu_norm = mu.dot(mu)
     for i in range(n):
-        T[i, -1] = 1-np.sum(np.abs(T[i] - mu)) 
+        T[i, -1] = 1-(mu.dot(T[i])/mu_norm)
     T = linalg.normalize_rows(T, norm=1)
     source = [n_full]
     sink = np.arange(n, n_full)
@@ -109,3 +110,5 @@ def flux(vertex):
     for i, child in enumerate(vertex.children):
         flux_vals[i] /= max(1, vertex.tree.get_n_samples(child))
     return flux_vals/np.sum(flux_vals)
+    
+
