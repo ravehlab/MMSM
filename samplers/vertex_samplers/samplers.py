@@ -94,7 +94,8 @@ def flux(vertex):
     # distribution, represented by the state with index -1, after bing in state i
     mu_norm = mu.dot(mu)
     for i in range(n):
-        T[i, -1] = 1-(mu.dot(T[i])/mu_norm)
+        T[i, -1] = 1-np.sum(np.min([T[i],mu], axis=0))
+
     T = linalg.normalize_rows(T, norm=1)
     source = [n_full]
     sink = np.arange(n, n_full)
