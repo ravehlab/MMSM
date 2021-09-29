@@ -30,7 +30,7 @@ def spectral(P, k, eig=None, return_eig=False):
         return clusters, eig
     return clusters
 
-def get_size_or_timescale_split_condition(max_size=2048, max_timescale=64):
+def get_size_or_timescale_split_condition(max_size=2048, max_timescale=32):
     """Get a function which checks if a vertices size or timescale are larger than some constant,
     provided as arguments to this function.
     """

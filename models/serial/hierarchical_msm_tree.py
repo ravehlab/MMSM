@@ -401,6 +401,9 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
     def _update_split(self, partition, taus, split_vertex, parent):
         if len(partition)==1: # this is a trivial partition
             return
+        elif split_vertex.is_root and len(partition)==split_vertex.n:
+            split_vertex.tau *= 2 #TODO this and it's parallel 20 lines down need to be in config
+            return
         new_vertices = []
         for i, subset in enumerate(partition):
             vertex = HierarchicalMSMVertex(self, subset, parent, \
@@ -590,11 +593,11 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
             for neighbor, transition_probability in zip(ids, transition_probabilities):
                 j = id_2_index[neighbor]
                 T[i,j] = transition_probability
-        linalg._assert_stochastic(T)
         if return_order:
             retval = np.linalg.matrix_power(T, tau), level
         else:
             retval = np.linalg.matrix_power(T, tau), level
+        linalg._assert_stochastic(retval[0])
         self._cache["get_level_T"][cache_key] = retval
         return retval
 

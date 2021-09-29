@@ -251,6 +251,7 @@ class HierarchicalMSMVertex:
         # get the transition matrix in timestep resolution self.tau #TODO Move down 8 lines if it doesn't break anything.
         self._T_tau = np.linalg.matrix_power(self._T, self.tau) # TODO: rename _T with _T_1.
         self._set_local_stationary_distribution()
+        self._T_is_updated = True
 
         # check if there are any children which should be one of my neighbors children instead
         vertices_to_disown = self._check_disown(id_2_index, n_external)
@@ -259,7 +260,6 @@ class HierarchicalMSMVertex:
             return HierarchicalMSMVertex.DISOWN_CHILDREN, vertices_to_disown
 
         # update variables derived from self._T
-        self._T_is_updated = True
         self._update_timescale()
         self._update_external_T()
 
@@ -330,7 +330,7 @@ class HierarchicalMSMVertex:
         T, v_ids = children_T
         child_index = v_ids.index(child)
         transition_probabilities = T[child_index]
-        steps = np.random.choice(v_ids, p=transition_probabilities, size=31)
+        steps = np.random.choice(v_ids, p=transition_probabilities, size=11)
         steps, counts = np.unique(steps, return_counts=True)
         for i, step in enumerate(steps):
             for _ in range(counts[i]):
@@ -341,8 +341,8 @@ class HierarchicalMSMVertex:
 
     def _get_most_likely_parent(self, row, n_external):
         temp_row = np.ndarray(1+n_external)
-        temp_row[0] = np.sum(self._T[row, :self.n]) - self._T[row, row]
-        temp_row[1:] = self._T[row, self.n:]
+        temp_row[0] = np.sum(self.T[row, :self.n]) - self.T[row, row]
+        temp_row[1:] = self.T[row, self.n:]
         maximum = np.argmax(temp_row)
         if maximum > 0:
             # argmax returns the highest maximal index, if it's the same as 0, we want to keep it
