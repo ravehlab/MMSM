@@ -50,13 +50,13 @@ def _get_sampler_by_name(name):
         raise NotImplementedError(f"Optimizer {name} not implemented.")
 
 
-def get_vertex_sampler(config:HMSMConfig):
-    if config.vertex_sampler in ("auto", "weighted"):
-        heuristics = [_get_sampler_by_name(h) for h in config.sampling_heuristics]
-        weights = np.array(config.sampling_heuristic_weights)
-        return WeightedVertexSampler(heuristics, weights)
-    else:
-        raise NotImplementedError(f"Optimizer {config.vertex_sampler} not implemented.")
+def get_vertex_sampler(config:HMSMConfig=None, sampling_heuristics=None, weights=None):
+    if config is not None:
+        sampling_heuristics = config.sampling_heuristics
+        weights = config.sampling_heuristic_weights
+    heuristics = [_get_sampler_by_name(h) for h in sampling_heuristics]
+    weights = np.array(weights)
+    return WeightedVertexSampler(heuristics, weights)
 
 def equilibrium(vertex):
     return vertex.local_stationary
@@ -93,7 +93,7 @@ def flux(vertex):
     # T[i, -1] represents the probability that we've "mixed", i.e. gone back to the stationary
     # distribution, represented by the state with index -1, after bing in state i
     for i in range(n):
-        T[i, -1] = 1-np.sum(np.abs(T[i] - mu)) 
+        T[i, -1] = 1-np.sum(np.min([T[i], mu], axis=0)) 
     T = linalg.normalize_rows(T, norm=1)
     source = [n_full]
     sink = np.arange(n, n_full)

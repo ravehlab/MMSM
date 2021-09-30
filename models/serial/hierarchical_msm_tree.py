@@ -85,8 +85,10 @@ class HierarchicalMSMTree(BaseHierarchicalMSMTree):
         self._microstate_counts[self.unseen_id][self.unseen_id] = 1
 
     def _init_root(self):
-        uniform = samplers.vertex_samplers.uniform_sample
-        sampler = samplers.vertex_samplers.WeightedVertexSampler([uniform], np.ones(1))
+        heuristics = ["uniform", "exploration"]
+        weights = [0.5, 0.5]
+        sampler = samplers.vertex_samplers.get_vertex_sampler(sampling_heuristics=heuristics, 
+                                                              weights=weights)
         root = HierarchicalMSMVertex(self, children=set(),\
                                            parent=None,\
                                            tau=1,

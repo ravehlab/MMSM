@@ -2,6 +2,7 @@
 
 # Author: Kessem Clein <kessem.clein@mail.huji.ac.il>
 
+import warnings
 import numpy as np
 from HMSM.util.linalg import normalize_rows
 from .util import get_size_or_timescale_split_condition, spectral
@@ -101,7 +102,7 @@ def _rw_gibbs(p, k, tau=1, n_iter=10, init=None, maximum_likelihood=True, transi
             return clusters[:it+2]
 
     if maximum_likelihood:
-        raise UserWarning("gibbs metastable clustering didn't converge, try increasing max_iter\
+        warnings.warn("gibbs metastable clustering didn't converge, try increasing max_iter\
                             or changing split criteria")
     return clusters
 

@@ -43,6 +43,7 @@ class BrownianDynamicsSampler(BaseTrajectorySampler):
                 self.njit_sample_from_point(x, sample_len, tau, self.force, self.dt,
                                             self.noise_magnitude, self.dim, temp_traj)
                 dtraj = self._get_dtraj(temp_traj)
+                dtraj[0] = microstate # edge case
                 dtrajs.append(dtraj)
         return dtrajs
 
