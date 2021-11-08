@@ -1,13 +1,13 @@
-# HMSM
+# MMSM (Multiscale Markov State Models)
 
 ## Author: 
 Kessem Clein
 
 ## Date last updated:
-After Feb 1st, 2021
+Oct 1st, 2021 or lateer
 
 ## Synopsis: 
-Hierarchical Markov-State Models code
+Multiscale Markov-State Models (MMSMs) and MMSM-Explore code
 
 ## Prerequisties: 
 * scipy
