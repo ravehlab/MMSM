@@ -1,7 +1,7 @@
 # MMSM (Multiscale Markov State Models)
 
 ## Author: 
-Kessem Clein
+Kessem Clein (Raveh lab)
 
 ## Date last updated:
 Oct 1st, 2021 or later
