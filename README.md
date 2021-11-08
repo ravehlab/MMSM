@@ -4,7 +4,7 @@
 Kessem Clein
 
 ## Date last updated:
-Oct 1st, 2021 or lateer
+Oct 1st, 2021 or later
 
 ## Synopsis: 
 Multiscale Markov-State Models (MMSMs) and MMSM-Explore code
